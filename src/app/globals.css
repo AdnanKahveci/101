@@ -293,3 +293,10 @@ body.dragging-tile .meld-zone {
 @media (prefers-reduced-motion: reduce) {
   .steam { animation: none; }
 }
+
+/* Kıraathane ortam sesi oynatıcısı */
+.ambient-card {
+  background: linear-gradient(180deg, rgba(46, 26, 14, 0.95), rgba(28, 16, 9, 0.96));
+  border: 1px solid rgba(242, 193, 78, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}

@@ -35,6 +35,7 @@ import { Rack, type DropTarget } from "./rack";
 import { CenterPile, ConnectionIcon, DiscardPile, MeldView, OpponentRail, PairView, PlayerBadge, seatName } from "./table";
 import { FlightLayer, TableCaption } from "./effects";
 import { ChatButton, ChatPanel, ChatTableLayer, useChat } from "./chat";
+import { AmbientButton, AmbientPlayer } from "./ambient";
 import type { ChatMessage } from "@/lib/chat-shared";
 import { useFx } from "./fx";
 import { HandResultDialog, MatchEndDialog, ScoreBoard } from "./panels";
@@ -349,6 +350,7 @@ export function GameClient({ matchId }: { matchId: string }) {
           <span className="ml-auto flex items-center gap-1">
             <ConnectionIcon status={status} />
             <ChatButton />
+            <AmbientButton />
             <Button size="sm" variant="secondary" onClick={() => setScoreOpen(true)} aria-label="Skor tablosu">
               <Trophy className="h-4 w-4" /> <span className="hidden sm:inline">Skor</span>
             </Button>
@@ -601,6 +603,7 @@ export function GameClient({ matchId }: { matchId: string }) {
       <FlightLayer okey={okey} />
       <ChatTableLayer />
       <ChatPanel view={view} />
+      <AmbientPlayer muted={!sound} />
       <ScoreBoard view={view} open={scoreOpen} onClose={() => setScoreOpen(false)} />
       {view.phase === "handResult" && <HandResultDialog view={view} busy={busy} onReady={() => act({ type: "READY_NEXT_HAND" })} />}
       {view.phase === "finished" && (
