@@ -206,7 +206,11 @@ export async function joinRoom(
     .from(schema.roomMembers)
     .where(and(eq(schema.roomMembers.roomId, room.id), eq(schema.roomMembers.userId, user.id)))
     .limit(1);
-  if (already) return buildView(room, user.id); // tekrar bağlantıda çifte katılım olmaz
+  if (already) {
+    // tekrar bağlantıda çifte katılım olmaz; listeden kaldırdığı odaya dönerse yeniden görünür
+    if (already.hidden) await db.update(schema.roomMembers).set({ hidden: false }).where(eq(schema.roomMembers.id, already.id));
+    return buildView(room, user.id);
+  }
 
   let invited = false;
   if (input.invitationId) {
@@ -447,6 +451,40 @@ export async function leaveRoom(code: string, user: AuthUser): Promise<{ left: b
   return { left: true, seatKept: false };
 }
 
+/**
+ * Odayı "Masalarım" listesinden kaldırır.
+ *  - Lobide / bitmiş odada: odadan ayrılır.
+ *  - Maç sürerken masada başka gerçek oyuncu yoksa (yalnızca botlar): oda kapatılır.
+ *  - Maç sürerken başka oyuncular varsa: koltuk korunur (oyun bozulmaz), oda yalnızca listeden gizlenir.
+ * Masada kimse (gerçek kişi) kalmazsa oda kapanır.
+ */
+export async function removeFromMyRooms(code: string, user: AuthUser): Promise<{ removed: true; closed: boolean }> {
+  const room = await roomByCode(code);
+  const m = await requireMember(room.id, user.id);
+  const db = await getDb();
+  const humansElse = (await members(room.id)).filter((x) => x.userId !== user.id && !x.username.startsWith(BOT_PREFIX));
+  const closeRoom = async () => {
+    await db.update(schema.rooms).set({ status: "closed", updatedAt: new Date() }).where(eq(schema.rooms.id, room.id));
+    await notifyRoom(room.id);
+  };
+  if (room.status === "playing" && m.seat !== null) {
+    if (humansElse.some((x) => x.seat !== null)) {
+      await db.update(schema.roomMembers).set({ hidden: true }).where(eq(schema.roomMembers.id, m.id));
+      return { removed: true, closed: false };
+    }
+    await db.update(schema.roomMembers).set({ hidden: true }).where(eq(schema.roomMembers.id, m.id));
+    await closeRoom();
+    return { removed: true, closed: true };
+  }
+  if (humansElse.length === 0) {
+    await db.update(schema.roomMembers).set({ hidden: true }).where(eq(schema.roomMembers.id, m.id));
+    if (room.status !== "closed") await closeRoom();
+    return { removed: true, closed: true };
+  }
+  await leaveRoom(code, user);
+  return { removed: true, closed: false };
+}
+
 export async function listPublicRooms() {
   const db = await getDb();
   const rows = await db
@@ -487,7 +525,7 @@ export async function myRooms(userId: string) {
     .select({ code: schema.rooms.code, name: schema.rooms.name, status: schema.rooms.status, currentMatchId: schema.rooms.currentMatchId, seat: schema.roomMembers.seat })
     .from(schema.roomMembers)
     .innerJoin(schema.rooms, eq(schema.rooms.id, schema.roomMembers.roomId))
-    .where(eq(schema.roomMembers.userId, userId))
+    .where(and(eq(schema.roomMembers.userId, userId), eq(schema.roomMembers.hidden, false)))
     .orderBy(desc(schema.rooms.updatedAt))
     .limit(20);
 }

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DoorOpen, Loader2, Plus } from "lucide-react";
+import { DoorOpen, Loader2, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { toast } from "@/lib/toast";
@@ -32,6 +32,27 @@ function Home() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState<"create" | "join" | null>(null);
   const [rooms, setRooms] = useState<MyRoom[]>([]);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const removeRoom = async (r: MyRoom) => {
+    const msg =
+      r.status === "playing"
+        ? `"${r.name}" masasını listeden kaldırmak istiyor musunuz?
+
+Masada başka oyuncu varsa koltuğunuz korunur (kodla geri dönebilirsiniz); yalnızca botlarla oynuyorsanız masa kapatılır.`
+        : `"${r.name}" masasını listeden kaldırmak istiyor musunuz?`;
+    if (!window.confirm(msg)) return;
+    setRemoving(r.code);
+    try {
+      await api(`/api/rooms/${r.code}`, { method: "DELETE" });
+      setRooms((x) => x.filter((y) => y.code !== r.code));
+      toast.success("Masa listeden kaldırıldı.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   useEffect(() => {
     if (!loaded) void refresh();
@@ -198,16 +219,27 @@ function Home() {
           <p className="mb-2 text-sm font-bold text-white/80">Masalarım</p>
           <ul className="space-y-1.5">
             {rooms.map((r) => (
-              <li key={r.code}>
+              <li key={r.code} className="flex items-stretch gap-1.5" data-testid={`my-room-${r.code}`}>
                 <Link
                   href={r.currentMatchId && r.status === "playing" ? `/game/${r.currentMatchId}` : `/room/${r.code}`}
-                  className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
                 >
-                  <span className="font-semibold">{r.name}</span>
-                  <span className="font-mono text-xs text-white/60">
-                    {r.code} · {r.status === "playing" ? "oyunda" : "lobide"}
+                  <span className="truncate font-semibold">{r.name}</span>
+                  <span className="shrink-0 font-mono text-xs text-white/60">
+                    {r.code} · {r.status === "playing" ? "oyunda" : r.status === "finished" ? "bitti" : "lobide"}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  className="grid w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white/50 hover:bg-red-500/80 hover:text-white disabled:opacity-40"
+                  aria-label={`${r.name} masasını listeden kaldır`}
+                  title="Listeden kaldır"
+                  data-testid={`remove-room-${r.code}`}
+                  disabled={removing === r.code}
+                  onClick={() => removeRoom(r)}
+                >
+                  {removing === r.code ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
               </li>
             ))}
           </ul>

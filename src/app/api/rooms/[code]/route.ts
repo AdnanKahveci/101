@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authed, open } from "@/server/http";
-import { getRoom, updateRoom } from "@/server/rooms";
+import { getRoom, removeFromMyRooms, updateRoom } from "@/server/rooms";
 
 export const GET = open(undefined, async ({ req, user, params }) => {
   const token = new URL(req.url).searchParams.get("t");
@@ -16,3 +16,6 @@ export const PATCH = authed(
   }),
   async ({ user, body, params }) => ({ room: await updateRoom(params.code, user, body) }),
 );
+
+/** "Masalarım" listesinden kaldır. */
+export const DELETE = authed(undefined, async ({ user, params }) => removeFromMyRooms(params.code, user));

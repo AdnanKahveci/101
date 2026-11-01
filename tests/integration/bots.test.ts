@@ -52,3 +52,34 @@ describe("Bot oyuncular", () => {
     expect(r.access).toBe("full");
   }, 60_000);
 });
+
+describe("Masalarım listesinden kaldırma", () => {
+  it("lobideki oda: ayrılır; yalnız botlu maç: kapanır; başkalarıyla maç: koltuk korunur, liste gizlenir, geri katılınca görünür", async () => {
+    const { myRooms, removeFromMyRooms, joinRoom, setReady } = await import("@/server/rooms");
+    const A = await makePlayer("Kaldiran");
+    const B = await makePlayer("Diger");
+
+    const lobby = await createRoom(A.user, { name: "Lobi", visibility: "private" });
+    expect((await myRooms(A.user.id)).some((r) => r.code === lobby.code)).toBe(true);
+    expect((await removeFromMyRooms(lobby.code, A.user)).closed).toBe(true);
+    expect((await myRooms(A.user.id)).some((r) => r.code === lobby.code)).toBe(false);
+
+    const solo = await createRoom(A.user, { name: "Solo", visibility: "private" });
+    await addBots(solo.code, A.user);
+    await startMatch(solo.code, A.user);
+    expect((await removeFromMyRooms(solo.code, A.user)).closed).toBe(true);
+    expect((await myRooms(A.user.id)).some((r) => r.code === solo.code)).toBe(false);
+
+    const duo = await createRoom(A.user, { name: "Ikili", visibility: "private" });
+    await joinRoom(duo.code, B.user, {});
+    await setReady(duo.code, B.user, true);
+    await addBots(duo.code, A.user);
+    const { matchId } = await startMatch(duo.code, A.user);
+    expect((await removeFromMyRooms(duo.code, A.user)).closed).toBe(false);
+    expect((await myRooms(A.user.id)).some((r) => r.code === duo.code)).toBe(false);
+    expect((await loadState(matchId)).players.some((p) => p.userId === A.user.id)).toBe(true);
+    expect((await myRooms(B.user.id)).find((r) => r.code === duo.code)?.status).toBe("playing");
+    await joinRoom(duo.code, A.user, {});
+    expect((await myRooms(A.user.id)).some((r) => r.code === duo.code)).toBe(true);
+  }, 60_000);
+});

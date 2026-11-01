@@ -152,6 +152,8 @@ export const roomMembers = pgTable(
     /** 0=Alt, 1=Sağ, 2=Üst, 3=Sol. Aynı koltuğa iki kişi oturamaz (kısmi benzersiz index). */
     seat: integer("seat"),
     ready: boolean("ready").notNull().default(false),
+    /** Oyuncu odayı "Masalarım" listesinden kaldırdı (devam eden maçta koltuk korunur). */
+    hidden: boolean("hidden").notNull().default(false),
     joinedAt: createdAt(),
   },
   (t) => [
