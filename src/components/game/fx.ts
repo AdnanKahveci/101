@@ -31,6 +31,9 @@ export interface Flight {
 interface FxStore {
   flights: Flight[];
   hidden: TileId[];
+  /** Masaya yeni konan taşlar (kısa süre vurgulanır: "taş buraya işlendi") */
+  recent: TileId[];
+  flash: (ids: TileId[]) => void;
   caption: { id: number; text: string; tone: "info" | "good" | "warn" } | null;
   add: (f: Omit<Flight, "id">) => void;
   done: (id: number) => void;
@@ -46,6 +49,11 @@ let captionTimer: ReturnType<typeof setTimeout> | null = null;
 export const useFx = create<FxStore>((set, get) => ({
   flights: [],
   hidden: [],
+  recent: [],
+  flash: (ids) => {
+    set({ recent: [...new Set([...get().recent, ...ids])] });
+    setTimeout(() => set({ recent: get().recent.filter((x) => !ids.includes(x)) }), 2200);
+  },
   caption: null,
   add: (f) => set({ flights: [...get().flights, { ...f, id: seq++ }] }),
   done: (id) => {
@@ -65,7 +73,7 @@ export const useFx = create<FxStore>((set, get) => ({
       if (get().caption?.id === id) set({ caption: null });
     }, 2600);
   },
-  clear: () => set({ flights: [], hidden: [], caption: null }),
+  clear: () => set({ flights: [], hidden: [], recent: [], caption: null }),
 }));
 
 export function rectOf(selector: string): Rect | null {
@@ -192,6 +200,11 @@ export function animateTransition(prev: ClientGameView, v: ClientGameView, opts:
       );
     }
   }
+  // Masaya yeni giren taşları vurgula (işleme/açılış/okey değiştirme)
+  const tableIds = (x: ClientGameView) => new Set([...x.hand.melds.flatMap((m) => m.cells.map((c) => c.tileId)), ...x.hand.pairs.flatMap((p) => p.tileIds)]);
+  const beforeIds = tableIds(prev);
+  const added = [...tableIds(v)].filter((id) => !beforeIds.has(id));
+  if (added.length && added.length <= 4) fx.flash(added);
   const meldTiles = (x: ClientGameView) => x.hand.melds.reduce((n, m) => n + m.cells.length, 0) + x.hand.pairs.length * 2;
   if (meldTiles(v) > meldTiles(prev) && v.players.every((p) => !!p.opened === !!prev.players.find((x) => x.seat === p.seat)?.opened)) play("tile");
 

@@ -54,7 +54,6 @@ export function GameClient({ matchId }: { matchId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState<TileId | null>(null);
-  const [addMode, setAddMode] = useState(false);
   const [jokerDialog, setJokerDialog] = useState<{ tileId: TileId; meldId: string } | null>(null);
   const [sound, setSound] = useState(true);
 
@@ -128,7 +127,6 @@ export function GameClient({ matchId }: { matchId: string }) {
     async (action: GameAction) => {
       const ok = await send(action);
       if (ok) {
-        setAddMode(false);
         if (action.type === "OPEN_MELDS" || action.type === "OPEN_PAIRS") useGame.getState().clearStaging();
         else useGame.getState().clearSelection();
       }
@@ -152,7 +150,7 @@ export function GameClient({ matchId }: { matchId: string }) {
   );
 
   const tryAddToMeld = useCallback(
-    async (tileId: TileId, meldId: string) => {
+    async (tileId: TileId, meldId: string, forcedSide?: "start" | "end") => {
       if (!view || !okey) return;
       const meld = view.hand.melds.find((m) => m.id === meldId);
       const tile = view.myHand.find((t) => t.id === tileId);
@@ -162,8 +160,8 @@ export function GameClient({ matchId }: { matchId: string }) {
         setJokerDialog({ tileId, meldId });
         return;
       }
-      let side: "start" | "end" | undefined;
-      if (isJoker(tile, okey) && meld.kind === "run") {
+      let side: "start" | "end" | undefined = meld.kind === "run" ? forcedSide : undefined;
+      if (!side && isJoker(tile, okey) && meld.kind === "run") {
         const canEnd = addTileToMeld(meld, tile, okey, view.rules, "end").ok;
         const canStart = addTileToMeld(meld, tile, okey, view.rules, "start").ok;
         if (canEnd && canStart) side = window.confirm("Okey serinin SONUNA eklensin mi? (İptal: başına)") ? "end" : "start";
@@ -266,7 +264,7 @@ export function GameClient({ matchId }: { matchId: string }) {
           toast.error("Şu an taş işleyemezsiniz.");
           return;
         }
-        void tryAddToMeld(tileId, target.meldId);
+        void tryAddToMeld(tileId, target.meldId, target.side);
       }
     },
     [view, legal, mySeat, doDiscard, tryAddToMeld],
@@ -290,8 +288,6 @@ export function GameClient({ matchId }: { matchId: string }) {
   const isMyTurn = view.phase === "playing" && view.hand.currentTurn === mySeat;
   const leftSeat = prevSeat(pos.bottom);
   const selectedOne = selected.length === 1 ? selected[0] : null;
-  // İşlek taşlar gösterilmez: hangi pere işlenebileceğini oyuncu kendisi görmeli.
-  const meldTargets = new Set<string>();
   const opened = me?.opened ?? null;
   const required = { run: view.hand.requiredRunPoints, pairs: view.hand.requiredPairCount };
   const meldsByOwner = ([pos.bottom, pos.right, pos.top, pos.left] as Seat[]).map((s) => ({
@@ -423,16 +419,16 @@ export function GameClient({ matchId }: { matchId: string }) {
                       .filter((o) => o.melds.length || o.pairs.length)
                       .map((o) => (
                         <div key={o.seat}>
-                          <p className="mb-0.5 text-[10px] font-bold text-white/60">{seatName(view, o.seat)}</p>
-                          <div className="flex flex-wrap gap-1">
+                          <p className="mb-1 text-[11px] font-bold text-white/70">{seatName(view, o.seat)}</p>
+                          <div className="flex flex-wrap items-start gap-2">
                             {o.melds.map((m) => (
                               <MeldView
                                 key={m.id}
                                 meld={m}
                                 okey={okey}
                                 ownerName={seatName(view, o.seat)}
-                                target={meldTargets.has(m.id)}
-                                onClick={addMode && selectedOne ? () => tryAddToMeld(selectedOne, m.id) : undefined}
+                                zones={isMyTurn && legal.has("ADD_TO_MELD")}
+                                onZone={selectedOne ? (side) => tryAddToMeld(selectedOne, m.id, side) : undefined}
                               />
                             ))}
                             {o.pairs.map((p) => (
@@ -555,10 +551,8 @@ export function GameClient({ matchId }: { matchId: string }) {
                 </Button>
               </>
             )}
-            {legal.has("ADD_TO_MELD") && (
-              <Button size="sm" variant={addMode ? "default" : "secondary"} disabled={!selectedOne} onClick={() => setAddMode((v) => !v)}>
-                {addMode ? "Per seçin…" : "Taş işle"}
-              </Button>
+            {legal.has("ADD_TO_MELD") && isMyTurn && (
+              <span className="px-1 text-[11px] text-white/60">İşlemek için taşı perin başındaki / sonundaki <b className="text-white/80">+</b> karesine sürükleyin veya seçip kareye dokunun</span>
             )}
             {(legal.has("DISCARD_TILE") || legal.has("FINISH_HAND")) && (
               <Button size="sm" variant={view.myHand.length === 1 ? "success" : "default"} disabled={busy || !selectedOne} onClick={() => selectedOne && doDiscard(selectedOne)}>

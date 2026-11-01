@@ -303,44 +303,67 @@ export function MeldView({
   meld,
   okey,
   ownerName,
-  target,
-  onClick,
+  zones,
+  onZone,
 }: {
   meld: TableMeld;
   okey: Face;
   ownerName: string;
-  target: boolean;
-  onClick?: () => void;
+  /** İşleme yapılabiliyorsa perin başında/sonunda bırakma kareleri göster (geçerlilik gösterilmez). */
+  zones?: boolean;
+  onZone?: (side: "start" | "end") => void;
 }) {
+  const recent = useFx((s) => s.recent);
+  const zone = (side: "start" | "end") => (
+    <button
+      type="button"
+      data-meld-id={meld.id}
+      data-meld-side={side}
+      onClick={onZone ? () => onZone(side) : undefined}
+      aria-label={`${ownerName} ${meld.kind === "run" ? "serisinin" : "grubunun"} ${side === "start" ? "başına" : "sonuna"} işle`}
+      title={side === "start" ? "Başına işle" : "Sonuna işle"}
+      className="meld-zone grid shrink-0 place-items-center rounded-md border-2 border-dashed border-white/25 text-base font-black text-white/40"
+    >
+      +
+    </button>
+  );
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.7 }}
+      initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.2 }}
       data-meld-id={meld.id}
-      onClick={onClick}
       title={`${ownerName} – ${meld.kind === "run" ? "seri" : "grup"}`}
-      className={cn(
-        "flex shrink-0 gap-[1px] rounded-md bg-black/25 p-0.5 shadow-[0_2px_6px_rgba(0,0,0,0.3)]",
-        target && "cursor-pointer ring-2 ring-emerald-400",
-        onClick && "cursor-pointer",
-      )}
+      className="meld-box flex shrink-0 items-center gap-[2px] rounded-lg border border-white/15 bg-black/30 p-1 shadow-[0_3px_8px_rgba(0,0,0,0.35)]"
     >
+      {zones && meld.kind === "run" && zone("start")}
       {meld.cells.map((c) => {
         const tile: TileT = c.tileId.startsWith("f-")
           ? { id: c.tileId, color: null, value: null, copyIndex: 0, isFakeJoker: true }
           : parseTile(c.tileId);
-        return <Tile key={c.tileId} tile={tile} okey={okey} size="xs" represents={c.isJoker ? { color: c.color, value: c.value } : null} />;
+        return (
+          <Tile
+            key={c.tileId}
+            tile={tile}
+            okey={okey}
+            size="meld"
+            layout={false}
+            highlight={recent.includes(c.tileId) ? "fresh" : null}
+            represents={c.isJoker ? { color: c.color, value: c.value } : null}
+          />
+        );
       })}
+      {zones && zone("end")}
     </motion.div>
   );
 }
 
 export function PairView({ pair, okey }: { pair: TablePair; okey: Face }) {
+  const recent = useFx((s) => s.recent);
   return (
-    <div className="flex shrink-0 gap-[1px] rounded-md bg-sky-900/30 p-0.5">
+    <div className="flex shrink-0 gap-[2px] rounded-lg border border-sky-300/20 bg-sky-950/40 p-1 shadow-[0_3px_8px_rgba(0,0,0,0.35)]">
       {pair.tileIds.map((id) => (
-        <Tile key={id} tile={parseTile(id)} okey={okey} size="xs" />
+        <Tile key={id} tile={parseTile(id)} okey={okey} size="meld" layout={false} highlight={recent.includes(id) ? "fresh" : null} />
       ))}
     </div>
   );

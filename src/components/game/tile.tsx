@@ -11,10 +11,11 @@ const COLOR_CLASS: Record<string, string> = {
   black: "text-tile-black",
 };
 
-export type TileSize = "xs" | "sm" | "md" | "rack" | "fill";
+export type TileSize = "xs" | "meld" | "sm" | "md" | "rack" | "fill";
 
 const SIZE: Record<TileSize, string> = {
   xs: "w-6 h-8 text-sm rounded",
+  meld: "w-7 h-10 text-base rounded-md sm:w-9 sm:h-12 sm:text-xl",
   sm: "w-8 h-11 text-lg rounded-md",
   md: "w-10 h-14 text-2xl rounded-md",
   rack: "w-[var(--tile-w)] h-[var(--tile-h)] text-[length:var(--tile-font)] rounded-md",

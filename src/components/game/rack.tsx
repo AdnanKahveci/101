@@ -11,6 +11,7 @@ export interface DropTarget {
   kind: "slot" | "discard" | "meld";
   slot?: number;
   meldId?: string;
+  side?: "start" | "end";
 }
 
 /**
@@ -20,6 +21,14 @@ export interface DropTarget {
  * - Masadaki bir pere bırak → taş işleme
  * Kısa dokunuş (sürüklemeden) taşı seçer.
  */
+/** Sürüklenen taşın bırakılacağı per / kareyi belirgin yap. */
+function markMeldHover(t: DropTarget | null) {
+  document.querySelectorAll(".meld-hover, .zone-hover").forEach((e) => e.classList.remove("meld-hover", "zone-hover"));
+  if (!t || t.kind !== "meld" || !t.meldId) return;
+  document.querySelector(`.meld-box[data-meld-id="${t.meldId}"]`)?.classList.add("meld-hover");
+  if (t.side) document.querySelector(`[data-meld-id="${t.meldId}"][data-meld-side="${t.side}"]`)?.classList.add("zone-hover");
+}
+
 export function Rack({
   tiles,
   okey,
@@ -44,6 +53,8 @@ export function Rack({
     for (const el of els) {
       const slot = el.closest<HTMLElement>("[data-slot]");
       if (slot) return { kind: "slot", slot: Number(slot.dataset.slot) };
+      const zone = el.closest<HTMLElement>("[data-meld-side]");
+      if (zone) return { kind: "meld", meldId: zone.dataset.meldId, side: zone.dataset.meldSide as "start" | "end" };
       const meld = el.closest<HTMLElement>("[data-meld-id]");
       if (meld) return { kind: "meld", meldId: meld.dataset.meldId };
       const discard = el.closest<HTMLElement>("[data-drop='discard']");
@@ -66,14 +77,18 @@ export function Rack({
     if (!s || s.pointerId !== e.pointerId) return;
     if (!s.moved && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) return;
     s.moved = true;
+    document.body.classList.add("dragging-tile");
     const t = targetAt(e.clientX, e.clientY);
     setDrag({ id: s.id, x: e.clientX, y: e.clientY, hover: t?.kind === "slot" ? t.slot! : null });
+    markMeldHover(t);
   };
   const onPointerUp = (e: React.PointerEvent) => {
     const s = start.current;
     start.current = null;
     setDrag(null);
+    markMeldHover(null);
     if (!s || s.pointerId !== e.pointerId) return;
+    document.body.classList.remove("dragging-tile");
     if (!s.moved) {
       play("select");
       toggleSelect(s.id);
