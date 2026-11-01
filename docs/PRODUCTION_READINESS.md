@@ -28,7 +28,7 @@ Tarih: 2026-11-01
 | Ayar | Durum |
 | --- | --- |
 | Framework: Next.js 16, `vercel-build` = migrasyon + `next build` | Hazır |
-| WebSocket route: `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `maxDuration = 800`, `upgradeWebSocket` | Hazır. Fluid Compute ve WebSocket beta hesabınızda açık olmalı. Plan sınırı daha düşükse `maxDuration` değerini düşürün. |
+| WebSocket route: `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `maxDuration = 300`, `upgradeWebSocket` | Hazır. Fluid Compute ve WebSocket beta hesabınızda açık olmalı. Plan sınırı daha düşükse `maxDuration` değerini düşürün. |
 | Sunucu dışı paketler (`pg`, `ioredis`, `ws`, `pglite`) | `serverExternalPackages` içinde |
 | Güvenlik başlıkları | nosniff, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy |
 | Oturum çerezi | HttpOnly, SameSite=Lax, Vercel'de Secure; DB'de yalnızca SHA-256 özeti |
@@ -54,7 +54,7 @@ Adımların ayrıntısı `DEPLOYMENT.md` dosyasındadır.
 
 1. `/api/health` → 200, `database: ok`, `redis: ok`.
 2. Farklı ağlardaki 4 cihazla oda oluşturma, davet linki, tam bir el ve sayfa yenileme ile yeniden bağlanma. Bu deneme Vercel WebSocket ve instance'lar arası Redis yayınını doğrular.
-3. Bir bağlantıyı 800 sn'den uzun açık tutup otomatik yeniden bağlanmanın sorunsuz olduğunu görmek.
+3. Bir bağlantıyı 300 sn'den uzun açık tutup otomatik yeniden bağlanmanın sorunsuz olduğunu görmek.
 
 ## Bilinen sınırlamalar ve riskler
 

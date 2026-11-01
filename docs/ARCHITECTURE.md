@@ -49,7 +49,7 @@ Süre aşımları ayrı bir zamanlayıcıya gerek duymaz. İstemci ping'lerinde 
 ## Vercel üzerinde durum ve ölçeklenme
 
 - Fonksiyon belleğinde **kalıcı state tutulmaz**. Bellekte yalnızca bağlantı nesneleri ve abonelikler bulunur.
-- WebSocket bağlantısı bir instance'a sabitlenir ve en fazla `maxDuration` (800 sn) yaşar. İstemci üstel geri çekilmeyle otomatik yeniden bağlanır:
+- WebSocket bağlantısı bir instance'a sabitlenir ve en fazla `maxDuration` (300 sn) yaşar. İstemci üstel geri çekilmeyle otomatik yeniden bağlanır:
   - `room`/`watch` aboneliklerini yeniden gönderir ve tam görünümü alır;
   - ıstaka dizilimini `localStorage`'dan geri yükler.
 - Farklı instance'lara bağlı oyuncular Redis pub/sub ile aynı olayları alır. Entegrasyon testinde iki ayrı sunucu instance'ı ile doğrulanmıştır.

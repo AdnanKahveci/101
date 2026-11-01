@@ -22,7 +22,7 @@ Oyunun tamamı (arayüz, API, WebSocket) Vercel Functions üzerinde çalışır.
 
 1. vercel.com → **Add New → Project** → GitHub deposunu içe aktarın. Framework otomatik olarak **Next.js** algılanır.
 2. Build Command boş bırakılabilir. `package.json` içindeki `vercel-build` (`migrate` + `next build`) Vercel tarafından otomatik kullanılır.
-3. **Settings → Functions → Fluid Compute** açık olmalıdır (yeni projelerde varsayılan). WebSocket uç noktası `src/app/api/ws/route.ts` Node.js runtime'ında `maxDuration = 800` ile çalışır.
+3. **Settings → Functions → Fluid Compute** açık olmalıdır (yeni projelerde varsayılan). WebSocket uç noktası `src/app/api/ws/route.ts` Node.js runtime'ında `maxDuration = 300` ile çalışır.
 4. Vercel Functions WebSocket desteği şu an **public beta**dır. Hesabınızda/planınızda etkin olduğunu doğrulayın. `maxDuration` değeri planınızın üst sınırını aşıyorsa route'taki değeri düşürün; istemci süre dolunca otomatik yeniden bağlanır.
 5. Git entegrasyonu bağlandığında `main` dalına her push **production**, diğer dallar ve PR'lar **preview** dağıtımı üretir.
 

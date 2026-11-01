@@ -4,7 +4,7 @@ import { handleConnection } from "@/server/realtime";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 /** Bağlantı en fazla fonksiyon süresi kadar yaşar; istemci otomatik yeniden bağlanır ve state'i geri yükler. */
-export const maxDuration = 800;
+export const maxDuration = 300; // Hobby (ücretsiz) plan üst sınırı; Pro planda 800 yapılabilir
 
 /**
  * Vercel Functions WebSocket uç noktası (Fluid Compute).
