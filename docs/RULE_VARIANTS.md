@@ -40,7 +40,7 @@ Kural profili `src/engine/types.ts` → `RuleProfile` içinde tanımlıdır, var
 | `partnerOfFinisherScoresZero` | Eşli: bitirenin eşi el cezası yazmaz | `true` | `false` | Bitirenin eşi ceza yazmaz |
 | `discardJokerPenalty` | Okey atma cezası (bitiş hariç) | `101` | sayı | — (Cezalı ile açılır/kapanır) |
 | `discardPlayablePenalty` | İşlek taş atma cezası | `101` | sayı | — (Cezalı ile) |
-| `failedTakePenalty` | Yan taşı kullanamayıp geri bırakma | `101` | sayı | — (Cezalı ile) |
+| `failedTakePenalty` | Yan taşı deneyip geri bırakma | `0` (sitede her zaman cezasız) | — | — |
 | `silerEnabled` | Elden biten pozitif toplamını siler | `false` | `true` | Siler |
 | `deckExhaustedScoring` | Deste bitince eller yazılır mı | `"penalties"` | `"noScore"` | Deste bitince |
 | `totalHands` | Maçtaki el sayısı | `11` | 3/5/7/9/11/15/21 veya özel 1-51 | El sayısı |

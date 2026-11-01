@@ -80,7 +80,7 @@ Bu belge `src/engine` içindeki oyun motorunun **gerçekte uyguladığı** kural
 - Alınan taş aynı turda kullanılmalıdır:
   - Henüz açmamış oyuncu açılışta bu taşı kullanmak zorundadır.
   - Açmış oyuncu taşı bir pere işlemeli ya da yeni bir perde kullanmalıdır.
-- Taş kullanılmadan taş atılamaz. Oyuncu `RETURN_DISCARD` ile taşı geri bırakabilir. Bu durumda cezalı masada **+101** (`failedTakePenalty`) ceza alır ve desteden çekmeye döner.
+- Taş kullanılmadan taş atılamaz. Oyuncu `RETURN_DISCARD` ile taşı geri bırakabilir. Taşa bakıp denemek serbesttir: geri bırakmak **cezasızdır** (`failedTakePenalty = 0`, devam eden maçlara da uygulanır) ve oyuncu desteden çekmeye döner.
 - Taş yığından çıkarıldığı için aynı taş iki kişi tarafından alınamaz.
 
 ## 8. Taş işleme ve okey değiştirme

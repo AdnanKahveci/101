@@ -97,7 +97,7 @@ export async function loadState(matchId: string, opts: { fresh?: boolean } = {})
 
 /** Bu kıraathanenin değişmez kuralları: 12-13-1 (13'ten sonra 1) serisi hiçbir masada geçerli değildir. Devam eden maçlara da uygulanır. */
 function withHouseRules(state: GameState): GameState {
-  if (state.rules.allowThirteenOne) state.rules = { ...state.rules, allowThirteenOne: false };
+  if (state.rules.allowThirteenOne || state.rules.failedTakePenalty) state.rules = { ...state.rules, allowThirteenOne: false, failedTakePenalty: 0 };
   return state;
 }
 

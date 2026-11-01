@@ -30,7 +30,7 @@ export default function RulesPage() {
     ["Elden bitişte rakip cezaları", `×${R.handFinishMultiplier}`, true],
     ["Okey atma (bitiş hariç)", `+${R.discardJokerPenalty}`, true],
     ["İşlek taş atma", `+${R.discardPlayablePenalty}`, true],
-    ["Yandan alınan taşı kullanamayıp geri bırakma", `+${R.failedTakePenalty}`, true],
+    ["Yandan alınan taşı denedikten sonra geri bırakma", "cezasız", false],
   ];
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-8">
@@ -76,8 +76,8 @@ export default function RulesPage() {
 
       <Section title="Yandan taş alma">
         <p>Yalnızca soldaki oyuncunun en son attığı taş alınabilir ve aynı turda kullanılmak zorundadır: henüz açmadıysanız bu taşla açmalısınız,
-          açtıysanız taşı bir pere işlemeli ya da yeni perde kullanmalısınız. Kullanamazsanız taşı geri bırakır, <b>+{R.failedTakePenalty}</b> ceza
-          yazarsınız <Cfg /> ve desteden çekersiniz. Alınan taş kullanılmadan taş atılamaz.</p>
+          açtıysanız taşı bir pere işlemeli ya da yeni perde kullanmalısınız. Taşı ıstakanıza alıp deneyebilirsiniz; kullanamazsanız <b>cezasız</b> geri bırakır
+          ve desteden çekersiniz. Alınan taş kullanılmadan taş atılamaz.</p>
       </Section>
 
       <Section title="Taş işleme ve okey değiştirme">

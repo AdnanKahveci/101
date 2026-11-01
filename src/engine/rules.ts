@@ -39,7 +39,7 @@ export const DEFAULT_RULES: RuleProfile = {
   partnerOfFinisherScoresZero: true,
   discardJokerPenalty: 101,
   discardPlayablePenalty: 101,
-  failedTakePenalty: 101,
+  failedTakePenalty: 0, // yandan alınan taşa bakıp denemek serbest; geri bırakmak cezasız
   takenTileMeldMultiplier: 10,
   jokerTakenPenalty: 101,
   headFinishPenalty: 404,

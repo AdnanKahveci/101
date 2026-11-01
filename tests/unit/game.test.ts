@@ -341,7 +341,7 @@ describe("Göstergeyle çift açma", () => {
 });
 
 describe("Yandan taş alma", () => {
-  it("açmamış oyuncu yandan aldığı taşla açmak zorundadır; açamazsa geri bırakır ve ceza alır", () => {
+  it("açmamış oyuncu yandan aldığı taşla açmak zorundadır; açamazsa geri bırakır (bakıp denemek cezasız)", () => {
     let s = scenario({
       indicator: IND,
       hands: { 0: ["r1-0", "r2-1", "y9-0"], 1: [...RUN46_R, ...RUN46_K, "r3-0", "k3-0", "k9-1", "y11-1"] },
@@ -357,7 +357,7 @@ describe("Yandan taş alma", () => {
     ).toBeTruthy();
     s = act(s, 1, { type: "RETURN_DISCARD" });
     expect(s.hand.discards[0].at(-1)?.id).toBe("y9-0");
-    expect(s.hand.penalties).toEqual([expect.objectContaining({ seat: 1, amount: 101 })]);
+    expect(s.hand.penalties).toEqual([]);
     expect(s.hand.turnPhase).toBe("awaitingDraw");
     s = act(s, 1, { type: "DRAW_TILE" });
   });

@@ -309,6 +309,41 @@ export function GameClient({ matchId }: { matchId: string }) {
     pairs: view.hand.pairs.filter((p) => p.owner === s),
   }));
 
+  /** Bir oyuncunun masaya açtığı perler ve çiftler – o oyuncunun önünde, ona doğru dizilir. */
+  const seatMelds = (seat: Seat, side: "top" | "bottom" | "left" | "right") => {
+    const o = meldsByOwner.find((x) => x.seat === seat);
+    if (!o || (o.melds.length === 0 && o.pairs.length === 0)) return null;
+    const vertical = side === "left" || side === "right";
+    return (
+      <div
+        className={cn(
+          "seat-melds flex max-h-full gap-1.5 rounded-xl p-1",
+          vertical ? "flex-col" : "flex-wrap justify-center",
+          side === "right" ? "items-end" : vertical ? "items-start" : "items-start",
+        )}
+        data-testid={`seat-melds-${side}`}
+      >
+        {o.melds.map((m) => (
+          <MeldView
+            key={m.id}
+            meld={m}
+            okey={okey}
+            ownerName={seatName(view, seat)}
+            zones={isMyTurn && legal.has("ADD_TO_MELD")}
+            onZone={selectedOne ? (sd) => tryAddToMeld(selectedOne, m.id, sd) : undefined}
+          />
+        ))}
+        {o.pairs.length > 0 && (
+          <div className={cn("gap-1.5", vertical ? "grid grid-cols-2" : "flex flex-wrap justify-center")}>
+            {o.pairs.map((pr) => (
+              <PairView key={pr.id} pair={pr} okey={okey} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const sortBy = (mode: "color" | "value") => {
     const sorted = sortHand(view.myHand, okey, mode);
     // Renk gruplarını ayrı satırlara/boşluklarla yerleştir
@@ -417,44 +452,22 @@ export function GameClient({ matchId }: { matchId: string }) {
               <PlayerBadge view={view} seat={pos.left} position="left" online={presence[pos.left] ?? false} />
               <OpponentRail count={view.players.find((p) => p.seat === pos.left)?.tileCount ?? 0} orientation="vertical" />
             </div>
-            <div className="col-start-2 row-start-2 flex min-h-0 flex-col items-center gap-2 overflow-hidden">
-              <CenterPile
-                view={view}
-                canDraw={isMyTurn && legal.has("DRAW_TILE") && !busy}
-                onDraw={(slot) => take("DRAW_TILE", slot)}
-                canTakeIndicator={isMyTurn && legal.has("TAKE_INDICATOR") && !busy}
-                onTakeIndicator={takeIndicator}
-              />
-              <div className="w-full min-h-0 flex-1 overflow-y-auto rounded-xl p-1.5" aria-label="Açılmış perler">
-                {view.hand.melds.length === 0 && view.hand.pairs.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-white/35">Henüz açan yok</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {meldsByOwner
-                      .filter((o) => o.melds.length || o.pairs.length)
-                      .map((o) => (
-                        <div key={o.seat}>
-                          <p className="mb-1 text-[11px] font-bold text-white/70">{seatName(view, o.seat)}</p>
-                          <div className="flex flex-wrap items-start gap-2">
-                            {o.melds.map((m) => (
-                              <MeldView
-                                key={m.id}
-                                meld={m}
-                                okey={okey}
-                                ownerName={seatName(view, o.seat)}
-                                zones={isMyTurn && legal.has("ADD_TO_MELD")}
-                                onZone={selectedOne ? (side) => tryAddToMeld(selectedOne, m.id, side) : undefined}
-                              />
-                            ))}
-                            {o.pairs.map((p) => (
-                              <PairView key={p.id} pair={p} okey={okey} />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
+            {/* Orta: her oyuncunun açtıkları kendi önünde (gerçek masadaki gibi), deste ortada */}
+            <div className="col-start-2 row-start-2 grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1" aria-label="Açılmış perler">
+              <div className="col-span-3 row-start-1 flex min-h-0 items-start justify-center overflow-y-auto">{seatMelds(pos.top, "top")}</div>
+              <div className="col-start-1 row-start-2 flex min-h-0 items-center justify-start overflow-y-auto">{seatMelds(pos.left, "left")}</div>
+              <div className="col-start-2 row-start-2 flex flex-col items-center justify-center gap-1">
+                <CenterPile
+                  view={view}
+                  canDraw={isMyTurn && legal.has("DRAW_TILE") && !busy}
+                  onDraw={(slot) => take("DRAW_TILE", slot)}
+                  canTakeIndicator={isMyTurn && legal.has("TAKE_INDICATOR") && !busy}
+                  onTakeIndicator={takeIndicator}
+                />
+                {view.hand.melds.length === 0 && view.hand.pairs.length === 0 && <p className="text-center text-xs text-white/35">Henüz açan yok</p>}
               </div>
+              <div className="col-start-3 row-start-2 flex min-h-0 items-center justify-end overflow-y-auto">{seatMelds(pos.right, "right")}</div>
+              <div className="col-span-3 row-start-3 flex min-h-0 items-end justify-center overflow-y-auto">{seatMelds(pos.bottom, "bottom")}</div>
             </div>
             <div className="col-start-3 row-start-2 flex items-center justify-end gap-1">
               <OpponentRail count={view.players.find((p) => p.seat === pos.right)?.tileCount ?? 0} orientation="vertical" />
@@ -540,7 +553,7 @@ export function GameClient({ matchId }: { matchId: string }) {
             )}
             {legal.has("RETURN_DISCARD") && (
               <Button size="sm" variant="danger" onClick={() => act({ type: "RETURN_DISCARD" })} disabled={busy}>
-                Geri bırak{view.rules.penaltiesEnabled ? ` (+${view.rules.failedTakePenalty})` : ""}
+                Geri bırak{view.rules.penaltiesEnabled && view.rules.failedTakePenalty > 0 ? ` (+${view.rules.failedTakePenalty})` : ""}
               </Button>
             )}
             {legal.has("OPEN_MELDS") && (
