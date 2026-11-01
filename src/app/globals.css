@@ -305,3 +305,5 @@ body.dragging-tile .meld-zone {
   width: 1.5rem;
   height: 2rem;
 }
+
+.emote-pop { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6)); }

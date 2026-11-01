@@ -7,7 +7,7 @@ let ctx: AudioContext | null = null;
 let enabled = true;
 let noiseBuf: AudioBuffer | null = null;
 
-export type SoundKind = "tile" | "draw" | "take" | "discard" | "open" | "turn" | "win" | "error" | "select" | "chat" | "pour" | "clink";
+export type SoundKind = "tile" | "draw" | "take" | "discard" | "open" | "turn" | "win" | "error" | "select" | "chat" | "pour" | "clink" | "whoosh" | "pop";
 
 export function setSoundEnabled(v: boolean) {
   enabled = v;
@@ -148,6 +148,13 @@ export function play(kind: SoundKind | "tile") {
         tone(t, 2637, 0.35, 0.07);
         tone(t, 3520, 0.25, 0.04);
         clack(t, { freq: 4200, gain: 0.12, decay: 0.03 });
+        break;
+      case "whoosh":
+        slide(t, 0.35, 0.09);
+        break;
+      case "pop":
+        tone(t, 520, 0.12, 0.12, "triangle", 260);
+        clack(t, { freq: 1500, gain: 0.3, decay: 0.05 });
         break;
       case "error":
         tone(t, 220, 0.18, 0.15, "square", 160);

@@ -3,7 +3,7 @@
  * yeni mesajlar maç kanalından yayınlanır. Yalnızca masadaki oyuncular yazabilir.
  */
 import { randomUUID } from "node:crypto";
-import { CHAT_MAX_LEN, DRINKS, type ChatMessage, type DrinkId } from "@/lib/chat-shared";
+import { CHAT_MAX_LEN, DRINKS, EMOTES, type ChatMessage, type DrinkId, type EmoteId } from "@/lib/chat-shared";
 import { getInfra, withLock } from "./infra";
 import { matchChannel, publish } from "./channels";
 import { fail } from "./errors";
@@ -47,7 +47,7 @@ export function cleanChatText(text: string): string {
 export async function sendChat(
   user: AuthUser,
   matchId: string,
-  input: { text?: string; drink?: DrinkId; to?: number | null },
+  input: { text?: string; drink?: DrinkId; emote?: EmoteId; to?: number | null },
 ): Promise<ChatMessage> {
   const state = await loadState(matchId);
   const me = state.players.find((p) => p.userId === user.id);
@@ -56,7 +56,15 @@ export async function sendChat(
   if ((await infra.incrWindow(`okey:chatrl:${user.id}`, 10_000)) > 8) fail("RATE_LIMITED", "Biraz yavaş – çok hızlı yazıyorsunuz.");
 
   let msg: ChatMessage;
-  if (input.drink) {
+  const target = () => {
+    const to = input.to ?? null;
+    if (to !== null && (to === me.seat || !state.players.some((p) => p.seat === to))) fail("BAD_REQUEST", "Geçersiz hedef.");
+    return to;
+  };
+  if (input.emote) {
+    if (!(input.emote in EMOTES)) fail("BAD_REQUEST", "Böyle bir emoji yok.");
+    msg = { id: randomUUID(), ts: Date.now(), seat: me.seat, name: me.displayName, kind: "emote", emote: input.emote, to: target() };
+  } else if (input.drink) {
     if (!(input.drink in DRINKS)) fail("BAD_REQUEST", "Böyle bir ikram yok.");
     const to = input.to ?? null;
     if (to !== null && (to === me.seat || !state.players.some((p) => p.seat === to))) fail("BAD_REQUEST", "Geçersiz ikram hedefi.");
@@ -68,7 +76,20 @@ export async function sendChat(
   }
   await append(matchId, msg);
   if (msg.kind === "drink") void botsThank(matchId, msg).catch(() => {});
+  if (msg.kind === "emote" && msg.to != null && Math.random() < 0.6) void botsTease(matchId, msg).catch(() => {});
   return msg;
+}
+
+const TEASE_BACK = ["Ayıp ayıp 😄", "Sen önce taşını düzgün at", "Bak hele bak", "Sabır… sabır…", "Elin bitince konuşuruz", "Hadi oradan 😏"];
+
+/** Bota atışma emojisi fırlatılırsa laf sokar. */
+async function botsTease(matchId: string, e: ChatMessage) {
+  const state = await loadState(matchId);
+  const t = state.players.find((p) => p.seat === e.to);
+  if (!t || !(await botIdsAmong([t.userId])).has(t.userId)) return;
+  await new Promise((r) => setTimeout(r, 1200 + Math.random() * 1200));
+  const text = TEASE_BACK[Math.floor(Math.random() * TEASE_BACK.length)];
+  await append(matchId, { id: randomUUID(), ts: Date.now(), seat: t.seat, name: t.displayName, kind: "text", text });
 }
 
 const THANKS = ["eyvallah, sağ ol!", "ellerine sağlık 🙏", "sağ olasın, ocağına bereket", "çok makbule geçti", "afiyetle içeriz, sağ ol"];

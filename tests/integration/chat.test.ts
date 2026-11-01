@@ -23,9 +23,12 @@ describe("Masa sohbeti ve ikramlar", () => {
     await expect(sendChat(A.user, matchId, { text: "   " })).rejects.toBeInstanceOf(AppError);
     await expect(sendChat(A.user, matchId, { drink: "cay", to: m1.seat })).rejects.toBeInstanceOf(AppError); // kendine ikram
 
+    const e1 = await sendChat(A.user, matchId, { emote: "patlican", to: (m1.seat + 1) % 4 });
+    expect(e1).toMatchObject({ kind: "emote", emote: "patlican", to: (m1.seat + 1) % 4 });
+    await expect(sendChat(A.user, matchId, { emote: "ortaparmak", to: m1.seat })).rejects.toBeInstanceOf(AppError); // kendine olmaz
     await new Promise((r) => setTimeout(r, 3500));
     const h = await chatHistory(matchId);
-    expect(h.slice(0, 2).map((m) => m.id)).toEqual([m1.id, m2.id]);
+    expect(h.slice(0, 3).map((m) => m.id)).toEqual([m1.id, m2.id, e1.id]);
     expect(h.some((m) => m.seat !== m1.seat && m.kind === "text" && m.text?.startsWith("Sohbetci"))).toBe(true);
   }, 30_000);
 

@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { AnimatePresence, motion } from "motion/react";
 import { MessageCircle, Send, X } from "lucide-react";
-import { CHAT_MAX_LEN, DRINKS, DRINK_IDS, QUICK_LINES, type ChatMessage, type DrinkId } from "@/lib/chat-shared";
+import { CHAT_MAX_LEN, DRINKS, DRINK_IDS, EMOTES, EMOTE_IDS, QUICK_LINES, type ChatMessage, type DrinkId, type EmoteId } from "@/lib/chat-shared";
 import { realtime } from "@/lib/realtime";
 import { play } from "@/lib/sound";
 import { cn } from "@/lib/utils";
@@ -27,9 +27,15 @@ interface Bubble {
 }
 interface Flying {
   id: string;
-  drink: DrinkId;
+  drink?: DrinkId;
+  emote?: EmoteId;
   from: number;
   to: number | null;
+}
+interface Pop {
+  id: string;
+  seat: number | null;
+  emote: EmoteId;
 }
 
 interface ChatState {
@@ -40,6 +46,10 @@ interface ChatState {
   served: Served[];
   bubbles: Bubble[];
   flying: Flying[];
+  pops: Pop[];
+  /** Atışma emojilerini göster (kapatan oyuncuya uçmaz, yalnızca sohbette yazar) */
+  showEmotes: boolean;
+  setShowEmotes: (v: boolean) => void;
   setOpen: (o: boolean) => void;
   history: (matchId: string, m: ChatMessage[]) => void;
   receive: (matchId: string, m: ChatMessage, mySeat: number | null) => void;
@@ -58,6 +68,20 @@ export const useChat = create<ChatState>((set, get) => ({
   served: [],
   bubbles: [],
   flying: [],
+  pops: [],
+  showEmotes: (() => {
+    try {
+      return typeof window === "undefined" || localStorage.getItem("okey:emotes") !== "0";
+    } catch {
+      return true;
+    }
+  })(),
+  setShowEmotes: (v) => {
+    try {
+      localStorage.setItem("okey:emotes", v ? "1" : "0");
+    } catch {}
+    set({ showEmotes: v });
+  },
   setOpen: (open) => set({ open, unread: open ? 0 : get().unread }),
   history: (matchId, messages) => {
     const recent = messages.filter((m) => m.kind === "drink" && Date.now() - m.ts < SERVED_MS);
@@ -74,7 +98,12 @@ export const useChat = create<ChatState>((set, get) => ({
     if (s.matchId !== matchId || s.messages.some((x) => x.id === m.id)) return;
     const mine = m.seat === mySeat;
     set({ messages: [...s.messages, m].slice(-80), unread: s.open || mine ? s.unread : s.unread + 1 });
-    if (m.kind === "drink" && m.drink) {
+    if (m.kind === "emote" && m.emote) {
+      if (get().showEmotes) {
+        set({ flying: [...get().flying, { id: m.id, emote: m.emote, from: m.seat, to: m.to ?? null }] });
+        play("whoosh");
+      }
+    } else if (m.kind === "drink" && m.drink) {
       set({ flying: [...get().flying, { id: m.id, drink: m.drink, from: m.seat, to: m.to ?? null }] });
       play("pour");
     } else if (m.text) {
@@ -86,11 +115,20 @@ export const useChat = create<ChatState>((set, get) => ({
   landed: (id) => {
     const f = get().flying.find((x) => x.id === id);
     if (!f) return;
-    set({ flying: get().flying.filter((x) => x.id !== id), served: [...get().served.filter((s) => s.seat !== f.to), { id, seat: f.to, drink: f.drink, from: f.from }] });
+    if (f.emote) {
+      const emote = f.emote;
+      set({ flying: get().flying.filter((x) => x.id !== id), pops: [...get().pops, { id, seat: f.to, emote }] });
+      play("pop");
+      setTimeout(() => set({ pops: get().pops.filter((p) => p.id !== id) }), 2600);
+      return;
+    }
+    if (!f.drink) return;
+    const drink = f.drink;
+    set({ flying: get().flying.filter((x) => x.id !== id), served: [...get().served.filter((s) => s.seat !== f.to), { id, seat: f.to, drink, from: f.from }] });
     play("clink");
     setTimeout(() => set({ served: get().served.filter((s) => s.id !== id) }), SERVED_MS);
   },
-  reset: () => set({ matchId: null, messages: [], open: false, unread: 0, served: [], bubbles: [], flying: [] }),
+  reset: () => set({ matchId: null, messages: [], open: false, unread: 0, served: [], bubbles: [], flying: [], pops: [] }),
 }));
 
 export function sendChatText(matchId: string, text: string) {
@@ -132,6 +170,7 @@ export function ChatTableLayer() {
   const served = useChat((s) => s.served);
   const bubbles = useChat((s) => s.bubbles);
   const flying = useChat((s) => s.flying);
+  const pops = useChat((s) => s.pops);
   return (
     <div className="pointer-events-none fixed inset-0 z-30" aria-hidden>
       {flying.map((f) => (
@@ -143,6 +182,9 @@ export function ChatTableLayer() {
         ))}
         {bubbles.map((b) => (
           <SpeechBubble key={b.id} b={b} />
+        ))}
+        {pops.map((p) => (
+          <EmotePop key={p.id} p={p} />
         ))}
       </AnimatePresence>
     </div>
@@ -175,7 +217,26 @@ function FlyingDrink({ f }: { f: Flying }) {
       transition={{ duration: 1.1, ease: [0.3, 0.7, 0.4, 1] }}
       onAnimationComplete={() => landed(f.id)}
     >
-      <span className="drink-glass text-3xl">{DRINKS[f.drink].emoji}</span>
+      <span className={cn("drink-glass", f.emote ? "text-4xl" : "text-3xl")}>{f.emote ? EMOTES[f.emote].emoji : DRINKS[f.drink!].emoji}</span>
+    </motion.div>
+  );
+}
+
+/** Hedefe çarpan atışma emojisi: büyür, sallanır, kaybolur. */
+function EmotePop({ p }: { p: Pop }) {
+  const r = useAnchor(p.seat);
+  if (!r) return null;
+  const x = r.x + r.w / 2 - 32;
+  const y = r.y + r.h / 2 - 32;
+  return (
+    <motion.div
+      className="absolute left-0 top-0 grid h-16 w-16 place-items-center"
+      initial={{ x, y, scale: 0.3, rotate: 0, opacity: 1 }}
+      animate={{ x, y, scale: [0.3, 1.8, 1.4, 1.6], rotate: [0, -18, 14, -8, 0], opacity: 1 }}
+      exit={{ x, y, scale: 0.2, opacity: 0 }}
+      transition={{ duration: 0.8 }}
+    >
+      <span className="emote-pop text-5xl">{EMOTES[p.emote].emoji}</span>
     </motion.div>
   );
 }
@@ -269,6 +330,9 @@ export function ChatPanel({ view }: { view: ClientGameView }) {
     if (sendChatText(view.matchId, v)) setText("");
   };
   const treat = (drink: DrinkId) => realtime.chat({ matchId: view.matchId, drink, to: target });
+  const tease = (emote: EmoteId) => realtime.chat({ matchId: view.matchId, emote, to: target });
+  const showEmotes = useChat((s) => s.showEmotes);
+  const setShowEmotes = useChat((s) => s.setShowEmotes);
 
   return (
     <AnimatePresence>
@@ -297,6 +361,15 @@ export function ChatPanel({ view }: { view: ClientGameView }) {
             {messages.length === 0 && <p className="mt-6 text-center text-xs text-white/40">Henüz kimse bir şey demedi. Bir çay ısmarlayarak başla!</p>}
             {messages.map((m) => {
               const mine = m.seat === view.mySeat;
+              if (m.kind === "emote" && m.emote) {
+                const to = m.to == null ? "masaya" : m.to === view.mySeat ? "sana" : nameOf(m.to);
+                return (
+                  <p key={m.id} className="rounded-lg bg-rose-900/25 px-2 py-1 text-center text-[11px] text-rose-100/90">
+                    <b>{mine ? "Sen" : m.name}</b> → {to} <span className="text-lg">{EMOTES[m.emote].emoji}</span>
+                    <span className="ml-1 text-white/30">{fmtTime(m.ts)}</span>
+                  </p>
+                );
+              }
               if (m.kind === "drink" && m.drink) {
                 const d = DRINKS[m.drink];
                 const to = m.to == null ? "masaya" : m.to === view.mySeat ? "senin için" : `${nameOf(m.to)} için`;
@@ -324,12 +397,12 @@ export function ChatPanel({ view }: { view: ClientGameView }) {
             <div className="space-y-2 border-t border-white/10 p-2">
               <div>
                 <div className="mb-1 flex items-center gap-1 text-[10px] text-white/60">
-                  <span className="font-bold">İkram et:</span>
+                  <span className="font-bold">Kime:</span>
                   <select
                     className="rounded bg-black/40 px-1 py-0.5 text-[11px] text-white outline-none"
                     value={target === null ? "" : String(target)}
                     onChange={(e) => setTarget(e.target.value === "" ? null : Number(e.target.value))}
-                    aria-label="İkram edilecek kişi"
+                    aria-label="İkram / atışma kime"
                     data-testid="drink-target"
                   >
                     <option value="">Masaya (herkese)</option>
@@ -351,6 +424,29 @@ export function ChatPanel({ view }: { view: ClientGameView }) {
                       onClick={() => treat(id)}
                     >
                       {DRINKS[id].emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between text-[10px] text-white/60">
+                  <span className="font-bold">Atışma:</span>
+                  <label className="flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" className="accent-[#f2c14e]" checked={showEmotes} onChange={(e) => setShowEmotes(e.target.checked)} data-testid="emotes-toggle" />
+                    Animasyonları göster
+                  </label>
+                </div>
+                <div className="grid grid-cols-6 gap-1 sm:grid-cols-12">
+                  {EMOTE_IDS.map((id) => (
+                    <button
+                      key={id}
+                      className="drink-btn grid aspect-square place-items-center rounded-lg text-lg"
+                      title={EMOTES[id].label}
+                      aria-label={`${EMOTES[id].label} gönder`}
+                      data-testid={`emote-${id}`}
+                      onClick={() => tease(id)}
+                    >
+                      {EMOTES[id].emoji}
                     </button>
                   ))}
                 </div>

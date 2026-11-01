@@ -16,7 +16,7 @@ import { runBots } from "./bots";
 import { getRoom } from "./rooms";
 import { commandSchema } from "./validation";
 import { chatHistory, sendChat } from "./chat";
-import { CHAT_MAX_LEN, DRINK_IDS, type ChatMessage } from "@/lib/chat-shared";
+import { CHAT_MAX_LEN, DRINK_IDS, EMOTE_IDS, type ChatMessage } from "@/lib/chat-shared";
 
 const clientMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("ping") }),
@@ -29,6 +29,7 @@ const clientMessage = z.discriminatedUnion("t", [
     matchId: z.string().uuid(),
     text: z.string().max(CHAT_MAX_LEN * 2).optional(),
     drink: z.enum(DRINK_IDS).optional(),
+    emote: z.enum(EMOTE_IDS).optional(),
     to: z.number().int().min(0).max(3).nullable().optional(),
   }),
 ]);
@@ -188,7 +189,7 @@ class Connection {
         case "cmd":
           return await this.onCommand(parsed.cmd);
         case "chat":
-          await sendChat(this.user, parsed.matchId, { text: parsed.text, drink: parsed.drink, to: parsed.to });
+          await sendChat(this.user, parsed.matchId, { text: parsed.text, drink: parsed.drink, emote: parsed.emote, to: parsed.to });
           return;
       }
     } catch (e) {

@@ -14,6 +14,25 @@ export const DRINKS = {
 export type DrinkId = keyof typeof DRINKS;
 export const DRINK_IDS = Object.keys(DRINKS) as [DrinkId, ...DrinkId[]];
 
+/** Atışma emojileri: rakibe fırlatılır, kısa süre yanında patlar. */
+export const EMOTES = {
+  ortaparmak: { label: "Orta parmak", emoji: "🖕" },
+  patlican: { label: "Patlıcan", emoji: "🍆" },
+  palyaco: { label: "Palyaço", emoji: "🤡" },
+  kaka: { label: "Kaka", emoji: "💩" },
+  koyun: { label: "Koyun", emoji: "🐑" },
+  kaplumbaga: { label: "Kaplumbağa (yavaş oyna!)", emoji: "🐢" },
+  uyku: { label: "Uyudun mu?", emoji: "😴" },
+  gulme: { label: "Gülmekten öldüm", emoji: "🤣" },
+  sinir: { label: "Sinir", emoji: "🤬" },
+  begenmedim: { label: "Beğenmedim", emoji: "👎" },
+  alkis: { label: "Alkış", emoji: "👏" },
+  aglama: { label: "Ağla", emoji: "😭" },
+} as const;
+
+export type EmoteId = keyof typeof EMOTES;
+export const EMOTE_IDS = Object.keys(EMOTES) as [EmoteId, ...EmoteId[]];
+
 /** Hızlı laflar: kıraathane ağzı. */
 export const QUICK_LINES = ["Hayırlı oyunlar!", "Kolay gelsin", "Eyvallah", "Hadi bakalım", "Ocağına sağlık", "Bu el bizim", "Oha!", "Elinize sağlık"];
 
@@ -22,10 +41,11 @@ export interface ChatMessage {
   ts: number;
   seat: number;
   name: string;
-  kind: "text" | "drink";
+  kind: "text" | "drink" | "emote";
   text?: string;
   drink?: DrinkId;
-  /** İkramın gönderildiği koltuk; null = masaya (herkese) */
+  emote?: EmoteId;
+  /** İkramın / atışmanın gönderildiği koltuk; null = masaya (herkese) */
   to?: number | null;
 }
 
