@@ -34,6 +34,8 @@ import { RACK_COLS, relativePositions, useGame } from "./store";
 import { Rack, type DropTarget } from "./rack";
 import { CenterPile, ConnectionIcon, DiscardPile, MeldView, OpponentRail, PairView, PlayerBadge, seatName } from "./table";
 import { FlightLayer, TableCaption } from "./effects";
+import { ChatButton, ChatPanel, ChatTableLayer, useChat } from "./chat";
+import type { ChatMessage } from "@/lib/chat-shared";
 import { useFx } from "./fx";
 import { HandResultDialog, MatchEndDialog, ScoreBoard } from "./panels";
 
@@ -67,6 +69,9 @@ export function GameClient({ matchId }: { matchId: string }) {
         const v = m.view as ClientGameView;
         if (v.matchId === matchId) useGame.getState().setView(v);
       }
+      if (m.t === "chatHistory" && m.matchId === matchId) useChat.getState().history(matchId, m.messages as ChatMessage[]);
+      if (m.t === "chat" && m.matchId === matchId) useChat.getState().receive(matchId, m.msg as ChatMessage, useGame.getState().view?.mySeat ?? null);
+      if (m.t === "error" && m.code === "RATE_LIMITED") toast.error(String(m.error));
       if (m.t === "pong" && m.presence) useGame.getState().setPresence(m.presence as Record<number, boolean>);
       if (m.t === "error" && (m.code === "FORBIDDEN" || m.code === "NOT_FOUND")) setError(String(m.error));
     });
@@ -84,6 +89,7 @@ export function GameClient({ matchId }: { matchId: string }) {
       release();
       useGame.getState().reset();
       useFx.getState().clear();
+      useChat.getState().reset();
     };
   }, [matchId, router]);
 
@@ -342,6 +348,7 @@ export function GameClient({ matchId }: { matchId: string }) {
           <span className="hidden text-white/50 sm:inline">Kod: <b className="font-mono tracking-wider text-white/80">{view.roomCode}</b></span>
           <span className="ml-auto flex items-center gap-1">
             <ConnectionIcon status={status} />
+            <ChatButton />
             <Button size="sm" variant="secondary" onClick={() => setScoreOpen(true)} aria-label="Skor tablosu">
               <Trophy className="h-4 w-4" /> <span className="hidden sm:inline">Skor</span>
             </Button>
@@ -592,6 +599,8 @@ export function GameClient({ matchId }: { matchId: string }) {
       </div>
 
       <FlightLayer okey={okey} />
+      <ChatTableLayer />
+      <ChatPanel view={view} />
       <ScoreBoard view={view} open={scoreOpen} onClose={() => setScoreOpen(false)} />
       {view.phase === "handResult" && <HandResultDialog view={view} busy={busy} onReady={() => act({ type: "READY_NEXT_HAND" })} />}
       {view.phase === "finished" && (

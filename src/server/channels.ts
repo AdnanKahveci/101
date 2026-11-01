@@ -1,4 +1,5 @@
 import { getInfra } from "./infra";
+import type { ChatMessage } from "@/lib/chat-shared";
 
 /** Instance'lar arası yayın kanalları (Redis pub/sub). Mesajlar gizli bilgi içermez; yalnızca "değişti" sinyalidir. */
 export const roomChannel = (roomId: string) => `okey:room:${roomId}`;
@@ -8,6 +9,7 @@ export const userChannel = (userId: string) => `okey:user:${userId}`;
 export type BusMessage =
   | { type: "room"; roomId: string; navigateToMatch?: string }
   | { type: "match"; matchId: string; version: number; force?: boolean }
+  | { type: "chat"; matchId: string; msg: ChatMessage }
   | { type: "notify"; kind: "invitation" | "friendRequest" | "friendAccepted"; data: Record<string, unknown> };
 
 export async function publish(channel: string, msg: BusMessage) {

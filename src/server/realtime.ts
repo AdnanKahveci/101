@@ -15,6 +15,8 @@ import { checkTimeout, loadState, processCommand, viewFor } from "./game-service
 import { runBots } from "./bots";
 import { getRoom } from "./rooms";
 import { commandSchema } from "./validation";
+import { chatHistory, sendChat } from "./chat";
+import { CHAT_MAX_LEN, DRINK_IDS, type ChatMessage } from "@/lib/chat-shared";
 
 const clientMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("ping") }),
@@ -22,6 +24,13 @@ const clientMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("watch"), matchId: z.string().uuid() }),
   z.object({ t: z.literal("sync"), matchId: z.string().uuid() }),
   z.object({ t: z.literal("cmd"), cmd: commandSchema }),
+  z.object({
+    t: z.literal("chat"),
+    matchId: z.string().uuid(),
+    text: z.string().max(CHAT_MAX_LEN * 2).optional(),
+    drink: z.enum(DRINK_IDS).optional(),
+    to: z.number().int().min(0).max(3).nullable().optional(),
+  }),
 ]);
 
 export type ServerMessage =
@@ -32,6 +41,8 @@ export type ServerMessage =
   | { t: "ack"; commandId: string; version: number; duplicate?: boolean }
   | { t: "nack"; commandId: string; code: string; error: string }
   | { t: "notify"; kind: string; data: Record<string, unknown> }
+  | { t: "chat"; matchId: string; msg: ChatMessage }
+  | { t: "chatHistory"; matchId: string; messages: ChatMessage[] }
   | { t: "error"; code: string; error: string };
 
 export interface UpgradeInfo {
@@ -176,6 +187,9 @@ class Connection {
           return await this.pushState(parsed.matchId, true);
         case "cmd":
           return await this.onCommand(parsed.cmd);
+        case "chat":
+          await sendChat(this.user, parsed.matchId, { text: parsed.text, drink: parsed.drink, to: parsed.to });
+          return;
       }
     } catch (e) {
       const err = e instanceof AppError ? e : null;
@@ -226,10 +240,15 @@ class Connection {
     this.watchedMatch = matchId;
     this.lastSentVersion = view.version;
     await this.subscribe(matchChannel(matchId), (msg) => {
+      if (msg.type === "chat") {
+        if (msg.matchId === matchId) this.send({ t: "chat", matchId, msg: msg.msg });
+        return;
+      }
       if (msg.type !== "match") return;
       if (msg.version > this.lastSentVersion || msg.force) void this.pushState(matchId, !!msg.force);
     });
     this.send({ t: "state", view });
+    this.send({ t: "chatHistory", matchId, messages: await chatHistory(matchId) });
     // Diğer oyunculara bağlantı durumunu bildir.
     await publish(matchChannel(matchId), { type: "match", matchId, version: view.version, force: true });
   }

@@ -7,7 +7,7 @@ let ctx: AudioContext | null = null;
 let enabled = true;
 let noiseBuf: AudioBuffer | null = null;
 
-export type SoundKind = "tile" | "draw" | "take" | "discard" | "open" | "turn" | "win" | "error" | "select";
+export type SoundKind = "tile" | "draw" | "take" | "discard" | "open" | "turn" | "win" | "error" | "select" | "chat" | "pour" | "clink";
 
 export function setSoundEnabled(v: boolean) {
   enabled = v;
@@ -134,6 +134,20 @@ export function play(kind: SoundKind | "tile") {
         break;
       case "win":
         [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.12, f, 0.35, 0.12, "triangle"));
+        break;
+      case "chat":
+        tone(t, 1320, 0.08, 0.06);
+        tone(t + 0.07, 1760, 0.1, 0.05);
+        break;
+      case "pour":
+        // Bardağa çay dökülüyor: yükselen hışırtı
+        slide(t, 0.5, 0.07);
+        break;
+      case "clink":
+        // İnce belli bardak tabağa konuyor: ince cam tınısı
+        tone(t, 2637, 0.35, 0.07);
+        tone(t, 3520, 0.25, 0.04);
+        clack(t, { freq: 4200, gain: 0.12, decay: 0.03 });
         break;
       case "error":
         tone(t, 220, 0.18, 0.15, "square", 160);

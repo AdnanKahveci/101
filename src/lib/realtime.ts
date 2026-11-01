@@ -129,6 +129,10 @@ class RealtimeClient {
   unwatchMatch() {
     this.wantMatch = null;
   }
+  /** Masa sohbeti / ikram. Bağlantı yoksa false döner. */
+  chat(msg: { matchId: string; text?: string; drink?: string; to?: number | null }): boolean {
+    return this.raw({ t: "chat", ...msg });
+  }
   sync(matchId: string) {
     this.raw({ t: "sync", matchId });
   }
