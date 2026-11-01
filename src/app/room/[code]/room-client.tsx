@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, Copy, Crown, Lock, LogOut, Play, Share2, UserPlus } from "lucide-react";
+import { Bot, Check, Copy, Crown, Lock, LogOut, Play, Share2, UserPlus, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { useSession } from "@/lib/session";
@@ -88,8 +88,8 @@ export function RoomClient({ code }: { code: string }) {
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-2xl font-black">Oda açılamadı</h1>
         <p className="mt-2 text-white/60">{error}</p>
-        <Link href="/rooms" className="mt-6 inline-block rounded-xl bg-gold px-4 py-2 font-bold text-felt-950">
-          Odalara dön
+        <Link href="/" className="mt-6 inline-block rounded-xl bg-gold px-4 py-2 font-bold text-felt-950">
+          Ana sayfaya dön
         </Link>
       </main>
     );
@@ -103,12 +103,11 @@ function GuestGate({ code, name, onDone }: { code: string; name: string; onDone:
   const [nick, setNick] = useState("");
   const [avatar, setAvatar] = useState(AVATARS[0]);
   const [busy, setBusy] = useState(false);
-  const next = typeof window !== "undefined" ? window.location.pathname + window.location.search : `/room/${code}`;
   return (
     <main className="mx-auto max-w-md px-4 py-10">
       <Card>
         <CardTitle>“{name}” odasına davet edildiniz</CardTitle>
-        <p className="mb-4 text-sm text-white/70">Katılmak için misafir olarak devam edin veya hesabınızla giriş yapın.</p>
+        <p className="mb-4 text-sm text-white/70">Bir takma ad yazın, masaya oturun. Hesap gerekmez.</p>
         <form
           className="space-y-3"
           onSubmit={async (e) => {
@@ -141,15 +140,9 @@ function GuestGate({ code, name, onDone }: { code: string; name: string; onDone:
             ))}
           </div>
           <Button className="w-full" disabled={busy}>
-            Misafir olarak devam et
+            Masaya otur
           </Button>
         </form>
-        <p className="mt-4 text-center text-sm text-white/60">
-          Hesabınız var mı?{" "}
-          <Link className="font-bold text-gold" href={`/login?next=${encodeURIComponent(next)}`}>
-            Giriş yapın
-          </Link>
-        </p>
       </Card>
     </main>
   );
@@ -254,12 +247,18 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
               <span className="text-lg">{AVATAR_EMOJI[m.avatar] ?? "🙂"}</span>
               <span className="max-w-[6rem] truncate">{m.displayName}</span>
               {m.isOwner && <Crown className="h-3.5 w-3.5 text-gold" aria-label="Oda sahibi" />}
+              {m.isBot && <Bot className="h-3.5 w-3.5 text-sky-300" aria-label="Bot" />}
             </span>
             <span className="flex items-center gap-1 text-[11px]">
               <span className={cn("h-2 w-2 rounded-full", m.online ? "bg-emerald-400" : "bg-white/30")} />
               {m.ready || m.isOwner ? <Badge tone="green">Hazır</Badge> : <Badge>Bekliyor</Badge>}
             </span>
-            {isOwner && m.userId !== meId && room.status === "lobby" && (
+            {isOwner && m.isBot && room.status === "lobby" && (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => call("bots", { remove: m.userId })} aria-label={`${m.displayName} botunu çıkar`}>
+                <X className="h-3.5 w-3.5" /> Çıkar
+              </Button>
+            )}
+            {isOwner && m.userId !== meId && !m.isBot && room.status === "lobby" && (
               <select
                 aria-label={`${m.displayName} koltuğunu değiştir`}
                 className="mt-1 rounded bg-black/30 text-[11px]"
@@ -300,7 +299,7 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
           className="ml-auto"
           onClick={async () => {
             const r = await call("leave", {});
-            if (r) router.push("/dashboard");
+            if (r) router.push("/");
           }}
         >
           <LogOut className="h-4 w-4" /> Odadan ayrıl
@@ -349,6 +348,11 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
                   Koltuktan kalk
                 </Button>
               )}
+              {isOwner && seated.length < 4 && (
+                <Button variant="secondary" disabled={busy} onClick={() => call("bots", {})} data-testid="add-bots">
+                  <Bot className="h-4 w-4" /> Boş koltuklara bot ekle
+                </Button>
+              )}
               {isOwner && (
                 <Button
                   disabled={busy || !allReady}
@@ -364,7 +368,9 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
             </div>
           )}
           {room.status === "lobby" && isOwner && !allReady && (
-            <p className="mt-2 text-center text-xs text-white/60">Başlatmak için dört oyuncu oturmalı ve herkes hazır olmalı.</p>
+            <p className="mt-2 text-center text-xs text-white/60">
+              Başlatmak için dört oyuncu oturmalı ve herkes hazır olmalı. Arkadaşların gelmediyse boş koltuklara bot ekleyip tek başına deneyebilirsin.
+            </p>
           )}
           {waiting.length > 0 && (
             <div className="mt-3 text-sm">
@@ -379,6 +385,24 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
             <CardTitle className="flex items-center gap-2">
               <Share2 className="h-5 w-5" /> Davet et
             </CardTitle>
+            <p className="mb-1 text-xs text-white/60">Arkadaşlarına bu kodu gönder; ana sayfada kodu yazıp katılırlar.</p>
+            <button
+              type="button"
+              className="mb-3 flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gold/60 bg-gold/10 py-3 font-mono text-3xl font-black tracking-[0.3em] text-gold hover:bg-gold/20"
+              aria-label="Oda kodunu kopyala"
+              data-testid="room-code"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(room.code);
+                  toast.success("Oda kodu kopyalandı.");
+                } catch {
+                  toast.error("Kopyalanamadı; kodu elle yazın.");
+                }
+              }}
+            >
+              {room.code} <Copy className="h-5 w-5" />
+            </button>
+            <p className="mb-1 text-xs text-white/60">veya doğrudan link:</p>
             <div className="flex gap-2">
               <Input readOnly value={inviteUrl} aria-label="Davet linki" data-testid="invite-url" onFocus={(e) => e.target.select()} />
               <Button
@@ -399,7 +423,8 @@ function Lobby({ room, meId, isGuest, onChange }: { room: RoomView; meId: string
             <div className="mt-2 flex flex-wrap gap-2">
               <a
                 className="inline-flex h-9 items-center rounded-xl bg-[#25D366] px-3 text-sm font-bold text-white"
-                href={`https://wa.me/?text=${encodeURIComponent(`101 Okey masama gel! ${inviteUrl}`)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(`101 Okey masama gel! Davet kodu: ${room.code}
+${inviteUrl}`)}`}
                 target="_blank"
                 rel="noreferrer"
               >

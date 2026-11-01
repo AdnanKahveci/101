@@ -32,6 +32,48 @@ export function calculateHandScore(state: GameState, rules: RuleProfile, info: F
   const scores: Record<Seat, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
   const name = (s: Seat) => state.players.find((p) => p.seat === s)?.displayName ?? `Oyuncu ${s + 1}`;
 
+  // Kafadan bitiş: kimse açmamışken tek turda açıp bitiş → bitirene ve eşine 0, rakiplere sabit ceza.
+  const handFinishType = finishType === "hand" || finishType === "handJoker";
+  const nobodyElseOpened = finisher !== null && SEATS.every((s) => s === finisher || !h.opened[s]);
+  if (finisher !== null && handFinishType && nobodyElseOpened) {
+    const penalty = rules.headFinishPenalty ?? 404;
+    const mate = rules.teamMode ? partner(finisher) : null;
+    breakdown.push({ seat: finisher, label: "Kafadan bitti – puan yazılmaz", amount: 0 });
+    bonuses.push({ seat: finisher, label: "Kafadan bitiş", amount: 0 });
+    reasons.push(`${name(finisher)} kimse açmadan kafadan bitti: kendisine${mate !== null ? " ve eşine" : ""} puan yazılmaz, rakiplere +${penalty}.`);
+    for (const s of SEATS) {
+      if (s === finisher) continue;
+      if (s === mate) {
+        breakdown.push({ seat: s, label: "Eşi kafadan bitti – puan yazılmaz", amount: 0 });
+        continue;
+      }
+      scores[s] += penalty;
+      breakdown.push({ seat: s, label: `Kafadan bitişe karşı ceza (+${penalty})`, amount: penalty });
+    }
+    // El içi cezalar yine yazılır
+    for (const p of h.penalties) {
+      scores[p.seat] += p.amount;
+      breakdown.push({ seat: p.seat, label: `Ceza: ${p.reason}`, amount: p.amount });
+    }
+    return {
+      handNumber: h.handNumber,
+      dealer: h.dealer,
+      firstPlayer: h.firstPlayer,
+      indicator: h.indicator,
+      okey: h.okey,
+      finisher,
+      finishType,
+      multiplier: 1,
+      appliedMultipliers: [],
+      playerScores: scores,
+      teamScores: rules.teamMode ? [scores[0] + scores[2], scores[1] + scores[3]] : null,
+      breakdown,
+      penalties: h.penalties.slice(),
+      bonuses,
+      reasons,
+    };
+  }
+
   // Bitiş çarpanları
   const applied: { label: string; factor: number }[] = [];
   if (finisher !== null) {

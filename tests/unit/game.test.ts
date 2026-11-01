@@ -228,6 +228,118 @@ describe("Katlamalı seri açma", () => {
   });
 });
 
+describe("Yandan alınan taş cezası ve çift işleme", () => {
+  const PAIRS5 = ["r5-0", "r5-1", "k6-0", "k6-1", "y8-0", "y8-1", "r9-0", "r9-1"]; // 4 çift + yan taşla 5.
+
+  it("yan taşla çift açılırsa taşı atana taş değeri ×20 ceza yazılır", () => {
+    let s = scenario({ indicator: IND, hands: { 0: ["r1-0", "r2-1", "y7-0"], 1: [...PAIRS5, "y7-1", "k1-0", "k1-1", "r13-1"] } });
+    s = act(s, 0, { type: "DISCARD_TILE", tileId: "y7-0" });
+    s = act(s, 1, { type: "TAKE_DISCARD" });
+    s = act(s, 1, {
+      type: "OPEN_PAIRS",
+      pairs: [["r5-0", "r5-1"], ["k6-0", "k6-1"], ["y8-0", "y8-1"], ["r9-0", "r9-1"], ["y7-0", "y7-1"]],
+    });
+    expect(s.hand.penalties).toEqual([expect.objectContaining({ seat: 0, amount: 140 })]);
+  });
+
+  it("açmış oyuncu yandan aldığı taşı işlerse taşı atana ×10 ceza yazılır", () => {
+    let s = scenario({
+      indicator: IND,
+      currentTurn: 1,
+      turnPhase: "awaitingAction",
+      hands: { 0: ["r1-0", "r2-1", "r9-0"], 1: [...RUN46_K, ...RUN46_R, "y3-0", "k3-0", "r3-0", "y12-1", "y13-1"], 2: ["y1-0", "y2-0"], 3: ["k5-0", "k6-0"] },
+    });
+    s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: RUN46_R }, { tileIds: RUN46_K }, { tileIds: GROUP9 }] });
+    s = act(s, 1, { type: "DISCARD_TILE", tileId: "y13-1" });
+    s = act(s, 2, { type: "DRAW_TILE" });
+    s = act(s, 2, { type: "DISCARD_TILE", tileId: s.hand.hands[2][0].id });
+    s = act(s, 3, { type: "DRAW_TILE" });
+    s = act(s, 3, { type: "DISCARD_TILE", tileId: s.hand.hands[3][0].id });
+    s = act(s, 0, { type: "DRAW_TILE" });
+    s = act(s, 0, { type: "DISCARD_TILE", tileId: "r9-0" });
+    s = act(s, 1, { type: "TAKE_DISCARD" });
+    const meld = s.hand.melds.find((m) => m.cells.some((c) => c.tileId === "r10-0"))!;
+    s = act(s, 1, { type: "ADD_TO_MELD", tileId: "r9-0", meldId: meld.id });
+    expect(s.hand.takeObligation).toBeNull();
+    expect(s.hand.penalties.at(-1)).toEqual(expect.objectContaining({ seat: 0, amount: 90 }));
+  });
+
+  it("seri açan oyuncu, masada çift açan varsa elindeki çiftleri işleyebilir", () => {
+    let s = scenario({
+      indicator: IND,
+      currentTurn: 1,
+      turnPhase: "awaitingAction",
+      hands: { 1: [...RUN46_K, ...RUN46_R, ...GROUP9, "y12-0", "y12-1", "k1-0", "k1-1"], 2: [...PAIRS5, "y7-0", "y7-1", "k2-0"] },
+    });
+    s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: RUN46_R }, { tileIds: RUN46_K }, { tileIds: GROUP9 }] });
+    // Henüz kimse çift açmadı → seri açan çift işleyemez
+    expect(getLegalActions({ ...s, hand: { ...s.hand, currentTurn: 1, turnPhase: "awaitingAction" } }, 1)).not.toContain("OPEN_PAIRS");
+    s = act(s, 1, { type: "DISCARD_TILE", tileId: "k1-0" });
+    s = act(s, 2, { type: "DRAW_TILE" });
+    s = act(s, 2, {
+      type: "OPEN_PAIRS",
+      pairs: [["r5-0", "r5-1"], ["k6-0", "k6-1"], ["y8-0", "y8-1"], ["r9-0", "r9-1"], ["y7-0", "y7-1"]],
+    });
+    const back = { ...s, hand: { ...s.hand, currentTurn: 1 as Seat, turnPhase: "awaitingAction" as const } };
+    expect(getLegalActions(back, 1)).toContain("OPEN_PAIRS");
+    const r = applyAction(back, { type: "OPEN_PAIRS", pairs: [["y12-0", "y12-1"]] }, 1, ctx);
+    expect(r.ok).toBe(true);
+  });
+
+  it("işlek taş: masadaki perde okeyin yerine geçebilecek taşı atmak da cezalıdır", () => {
+    let s = scenario({
+      indicator: IND,
+      currentTurn: 1,
+      turnPhase: "awaitingAction",
+      hands: { 1: ["r10-0", "b4-0", "r12-0", "r13-0", ...RUN46_K, "y3-0", "k3-0", "r3-0", "k1-0", "k1-1"], 2: ["r11-1", "y2-0"] },
+    });
+    s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: ["r10-0", "b4-0", "r12-0", "r13-0"] }, { tileIds: RUN46_K }, { tileIds: GROUP9 }] });
+    s = act(s, 1, { type: "DISCARD_TILE", tileId: "k1-0" });
+    s = act(s, 2, { type: "DRAW_TILE" });
+    s = act(s, 2, { type: "DISCARD_TILE", tileId: "r11-1" });
+    expect(s.hand.penalties.at(-1)).toEqual(expect.objectContaining({ seat: 2, amount: 101 }));
+  });
+});
+
+describe("Göstergeyle çift açma", () => {
+  // Gösterge Mavi 3 (b3-0); eşi b3-1 elde
+  const PAIRS4 = ["r5-0", "r5-1", "k6-0", "k6-1", "y8-0", "y8-1", "r9-0", "r9-1"];
+  const base = () =>
+    scenario({ indicator: IND, currentTurn: 0, turnPhase: "awaitingAction", hands: { 0: [...PAIRS4, "b3-1", "k1-0", "y13-0"] } });
+
+  it("göstergenin eşi eldeyse masadaki gösterge alınıp çift açılabilir", () => {
+    let s = base();
+    expect(getLegalActions(s, 0)).toContain("TAKE_INDICATOR");
+    s = act(s, 0, { type: "TAKE_INDICATOR" });
+    expect(s.hand.hands[0].map((t) => t.id)).toContain("b3-0");
+    // Göstergeyi kullanmadan taş atılamaz, seri açılamaz
+    expect(reject(s, 0, { type: "DISCARD_TILE", tileId: "k1-0" })).toContain("Göstergeyi");
+    // Göstergesiz çift açılışı reddedilir
+    expect(reject(s, 0, { type: "OPEN_PAIRS", pairs: [["r5-0", "r5-1"], ["k6-0", "k6-1"], ["y8-0", "y8-1"], ["r9-0", "r9-1"], ["k1-0", "y13-0"]] })).toBeTruthy();
+    s = act(s, 0, {
+      type: "OPEN_PAIRS",
+      pairs: [["r5-0", "r5-1"], ["k6-0", "k6-1"], ["y8-0", "y8-1"], ["r9-0", "r9-1"], ["b3-1", "b3-0"]],
+    });
+    expect(s.hand.pairs).toHaveLength(5);
+    expect(s.hand.indicatorTaken).toEqual({ seat: 0, inPair: true });
+    expect(countAllTiles(s)).toHaveLength(106);
+    expect(new Set(countAllTiles(s)).size).toBe(106);
+    s = act(s, 0, { type: "DISCARD_TILE", tileId: "k1-0" });
+    expect(getLegalActions(s, 1)).not.toContain("TAKE_INDICATOR");
+  });
+
+  it("alınan gösterge cezasız geri bırakılabilir; eşi olmayan gösterge alamaz", () => {
+    let s = base();
+    s = act(s, 0, { type: "TAKE_INDICATOR" });
+    s = act(s, 0, { type: "RETURN_INDICATOR" });
+    expect(s.hand.hands[0].map((t) => t.id)).not.toContain("b3-0");
+    expect(s.hand.penalties).toHaveLength(0);
+    expect(countAllTiles(s)).toHaveLength(106);
+    const other = scenario({ indicator: IND, currentTurn: 0, turnPhase: "awaitingAction", hands: { 0: [...PAIRS4, "k1-0"] } });
+    expect(reject(other, 0, { type: "TAKE_INDICATOR" })).toContain("eşi");
+  });
+});
+
 describe("Yandan taş alma", () => {
   it("açmamış oyuncu yandan aldığı taşla açmak zorundadır; açamazsa geri bırakır ve ceza alır", () => {
     let s = scenario({
@@ -259,6 +371,8 @@ describe("Yandan taş alma", () => {
     s = act(s, 1, { type: "TAKE_DISCARD" });
     s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: RUN46_R }, { tileIds: RUN46_K }, { tileIds: GROUP9 }] });
     expect(s.hand.takeObligation).toBeNull();
+    // Taşı atan oyuncuya (0) taş değeri ×10 ceza: Sarı 3 → 30
+    expect(s.hand.penalties).toEqual([expect.objectContaining({ seat: 0, amount: 30 })]);
     s = act(s, 1, { type: "DISCARD_TILE", tileId: "k9-1" });
   });
 
@@ -338,6 +452,26 @@ describe("Taş işleme, okey değiştirme ve cezalar", () => {
     expect(JSON.stringify(s)).not.toBe(before);
     expect(s.hand.melds[0].cells[1]).toMatchObject({ tileId: "r11-1", isJoker: false });
     expect(s.hand.melds.at(-1)!.cells.map((c) => c.tileId)).toContain("b4-0");
+    expect(s.hand.penalties).toHaveLength(0); // kendi perinden okey almak cezasız
+  });
+
+  it("rakibin perindeki okey alınırsa per sahibine 101 ceza yazılır", () => {
+    let s = scenario({
+      indicator: IND, // okey Mavi 4
+      hands: {
+        0: ["r10-0", "r11-0", "b4-0", ...RUN46_K, "y10-0", "y11-0", "y12-0", "k1-0", "k2-0"],
+        1: ["r10-1", "r11-1", "r12-1", "r13-1", "b10-0", "b11-0", "b12-0", "b13-0", ...GROUP9, "r12-0", "y5-0", "y6-0", "k5-0"],
+      },
+    });
+    // Koltuk 0: Kırmızı 10-11-okey(12) = 33 + 46 + 33 = 112 ile açar
+    s = act(s, 0, { type: "OPEN_MELDS", melds: [{ tileIds: ["r10-0", "r11-0", "b4-0"] }, { tileIds: RUN46_K }, { tileIds: ["y10-0", "y11-0", "y12-0"] }] });
+    s = act(s, 0, { type: "DISCARD_TILE", tileId: "k1-0" });
+    s = act(s, 1, { type: "DRAW_TILE" });
+    s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: ["r10-1", "r11-1", "r12-1", "r13-1"] }, { tileIds: ["b10-0", "b11-0", "b12-0", "b13-0"] }, { tileIds: GROUP9 }] });
+    const before = s.hand.penalties.length;
+    const meldId = s.hand.melds.find((m) => m.owner === 0 && m.cells.some((c) => c.tileId === "b4-0"))!.id;
+    s = act(s, 1, { type: "REPLACE_JOKER", meldId, tileId: "r12-0", jokerUse: { type: "newMeld", meld: { tileIds: ["y5-0", "y6-0", "b4-0"] } } });
+    expect(s.hand.penalties.slice(before)).toEqual([expect.objectContaining({ seat: 0, amount: 101 })]);
   });
 
   it("okey değiştirme kapalı profilde reddedilir", () => {
@@ -418,8 +552,9 @@ describe("Bitiş ve puanlama", () => {
     expect(s.handResults[0].playerScores[2]).toBe(28);
   });
 
-  it("elden bitiş: tek turda açıp biten -202, rakipler ×2", () => {
+  it("kafadan bitiş (kimse açmamışken tek turda açıp bitme): bitirene ve eşine 0, rakiplere +404", () => {
     let s = scenario({
+      rules: { teamMode: true },
       indicator: IND,
       hands: { 0: [...RUN46_R, ...RUN46_K, ...GROUP9, "y5-0", "y6-0", "y7-0", "y8-0", "y9-0", "y10-0", "y11-0", "y12-0", "y13-0"], 1: ["k1-0"] },
     });
@@ -428,9 +563,39 @@ describe("Bitiş ve puanlama", () => {
       melds: [{ tileIds: RUN46_R }, { tileIds: RUN46_K }, { tileIds: GROUP9 }, { tileIds: ["y5-0", "y6-0", "y7-0", "y8-0", "y9-0", "y10-0", "y11-0", "y12-0"] }],
     });
     s = act(s, 0, { type: "FINISH_HAND", tileId: "y13-0" });
+    const res = s.handResults[0];
+    expect(res.playerScores).toEqual({ 0: 0, 1: 404, 2: 0, 3: 404 });
+    expect(res.teamScores).toEqual([0, 808]);
+  });
+
+  it("elden bitiş (başkası açmışken tek turda açıp bitme): biten -202, rakipler ×2", () => {
+    let s = scenario({
+      indicator: IND,
+      currentTurn: 1,
+      turnPhase: "awaitingAction",
+      drawPile: ["k5-0", "k6-0", "y5-0"],
+      hands: {
+        0: [...RUN46_R, ...RUN46_K, ...GROUP9, "y6-0", "y7-0", "y8-0", "y9-0", "y10-0", "y11-0", "y12-0", "y13-0"],
+        1: ["b10-0", "b11-0", "b12-0", "b13-0", "r10-1", "r11-1", "r12-1", "r13-1", "r3-1", "k3-1", "y3-1", "k1-0", "k2-0"],
+        2: ["y1-0", "y2-0"],
+        3: ["k5-1", "k6-1"],
+      },
+    });
+    s = act(s, 1, { type: "OPEN_MELDS", melds: [{ tileIds: ["b10-0", "b11-0", "b12-0", "b13-0"] }, { tileIds: ["r10-1", "r11-1", "r12-1", "r13-1"] }, { tileIds: ["r3-1", "k3-1", "y3-1"] }] });
+    s = act(s, 1, { type: "DISCARD_TILE", tileId: "k1-0" });
+    s = act(s, 2, { type: "DRAW_TILE" });
+    s = act(s, 2, { type: "DISCARD_TILE", tileId: "y1-0" });
+    s = act(s, 3, { type: "DRAW_TILE" });
+    s = act(s, 3, { type: "DISCARD_TILE", tileId: "k5-1" });
+    s = act(s, 0, { type: "DRAW_TILE" });
+    s = act(s, 0, {
+      type: "OPEN_MELDS",
+      melds: [{ tileIds: RUN46_R }, { tileIds: RUN46_K }, { tileIds: GROUP9 }, { tileIds: ["y5-0", "y6-0", "y7-0", "y8-0", "y9-0", "y10-0", "y11-0", "y12-0"] }],
+    });
+    s = act(s, 0, { type: "FINISH_HAND", tileId: "y13-0" });
     expect(s.handResults[0].finishType).toBe("hand");
     expect(s.handResults[0].playerScores[0]).toBe(-202);
-    expect(s.handResults[0].playerScores[1]).toBe(404);
+    expect(s.handResults[0].playerScores[2]).toBe(404); // açmadı 202 ×2
   });
 
   it("açmadan bitilemez", () => {

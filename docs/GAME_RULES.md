@@ -119,6 +119,7 @@ Açmış bir oyuncu, elinde tek taş kaldığında o taşı atarak biter. Açmad
   - okey atma (+101)
   - işlek taş atma (+101)
   - yandan alıp kullanamama (+101)
+  - attığı taş yandan alınıp kullanılan oyuncuya taş değeri ×10 (seri/işleme) veya ×20 (çift)
 - **Eşli:** bitirenin eşinin el cezası sıfırlanır (`partnerOfFinisherScoresZero = true`); el içi cezaları yine yazılır. Takım puanı iki oyuncunun toplamıdır.
 
 Her sonuç satırı `breakdown`, `reasons`, `appliedMultipliers`, `penalties` ve `bonuses` alanlarıyla oyunculara açıklanır.
@@ -143,8 +144,14 @@ Bu örneklerde okey Mavi 4'tür:
 ## 11. Cezalar (cezalı masa, `penaltiesEnabled = true`)
 
 - **Okey atma:** bitiş hamlesi dışında +101.
-- **İşlek taş atma:** masadaki bir pere işlenebilecek taşı atmak +101.
-- **Yandan alınan taşı kullanamama:** +101.
+- **İşlek taş atma:** masadaki bir pere işlenebilecek (veya perdeki okeyin yerine geçebilecek) taşı atmak +101. İşlek taşlar arayüzde gösterilmez.
+- **Yandan alınan taşı kullanamama:** +101 (alan oyuncuya).
+- **Yandan alınan taşın kullanılması:** taşı ATAN oyuncuya taş değeri ×10 (seri açma, yeni per, işleme) veya ×20 (çift açma/işleme). Açmadan önce de açtıktan sonra da geçerlidir (`takenTileMeldMultiplier`, `takenTilePairMultiplier`).
+- **Kafadan bitiş:** kimse açmamışken bir oyuncu ilk açışında (tek turda açıp) biterse bitirene ve eşine puan yazılmaz (0); rakiplerin her birine +404 yazılır (`headFinishPenalty`). El içi cezalar yine eklenir. Başkası açmışken tek turda açıp bitmek normal "elden bitiş"tir (−202, rakipler ×2).
+- **Rakibin okeyini alma:** taş işlerken rakibin perindeki okeyin yerine gerçek taşı koyup okeyi alırsanız (ör. rakip Kırmızı 10-11-okey açmış, sizde Kırmızı 12 var) per sahibine +101 ceza yazılır (`jokerTakenPenalty`). Kendi perinizden veya eşli oyunda eşinizin perinden almak cezasızdır.
+- **Göstergeyle çift:** göstergenin eşini elinde tutan oyuncu, ilk açılışında masadaki gösterge taşını alıp (`TAKE_INDICATOR`) ıstakasında istediği yere koyabilir ve eşiyle çift olarak açabilir. Alınan gösterge aynı turda bir çiftte kullanılmalıdır; kullanılmayacaksa cezasız geri bırakılır (`RETURN_INDICATOR`). Okey belirlenmiş olduğu için değişmez.
+- **Çift işleme:** seri açmış oyuncu, masada biri çift açmışsa elindeki çiftleri de masaya koyabilir.
+- **Eşli katlamalı baraj (varsayılan `independent`):** yalnızca rakip takımın açılışları barajı yükseltir. Ör. ben 140, rakip 144 açtıysa eşim en az 145 açmalı; rakip açmadıysa eşime 101 yeter.
 - **Geçersiz hamle girişimi:** ceza verilmez; sunucu hamleyi reddeder ve state değişmez.
 
 ## 12. Siler (`silerEnabled`, varsayılan kapalı)

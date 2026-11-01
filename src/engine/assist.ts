@@ -1,7 +1,7 @@
 /**
  * Yardımlı mod algoritmaları. YALNIZCA oyuncunun kendi taşlarını ve kamuya açık masa bilgisini kullanır.
  */
-import { addTileToMeld, validateMeld } from "./melds";
+import { addTileToMeld, validateMeld, validatePair } from "./melds";
 import { effectiveFace, isJoker } from "./tiles";
 import { COLORS, type Color, type Face, type MeldSpec, type RuleProfile, type TableMeld, type Tile, type TileId } from "./types";
 
@@ -164,4 +164,77 @@ export function sortHand(hand: Tile[], okey: Face, mode: "color" | "value"): Til
     if (mode === "color") return colorIdx(a) - colorIdx(b) || val(a) - val(b) || a.id.localeCompare(b.id);
     return val(a) - val(b) || colorIdx(a) - colorIdx(b) || a.id.localeCompare(b.id);
   });
+}
+
+/**
+ * Istakadaki dizilimden perleri çıkarır: aynı sıradaki bitişik taşlar (boş yuva veya sıra sonu ile ayrılmış)
+ * bir grup oluşturur. Grup tek başına geçerli bir per değilse, en yüksek puanlı geçerli alt bölünmeye ayrılır
+ * (ör. "3 4 5 7 7 7" bitişik dizilmişse 3-4-5 serisi + 7'li grup).
+ */
+export function meldsFromRack(
+  slots: (TileId | null)[],
+  cols: number,
+  hand: Tile[],
+  okey: Face,
+  rules: RuleProfile,
+): { melds: MeldSpec[]; total: number } {
+  const byId = new Map(hand.map((t) => [t.id, t]));
+  const segments: Tile[][] = [];
+  let cur: Tile[] = [];
+  slots.forEach((id, i) => {
+    if (i % cols === 0 && cur.length) {
+      segments.push(cur);
+      cur = [];
+    }
+    const t = id ? byId.get(id) : undefined;
+    if (t) cur.push(t);
+    else if (cur.length) {
+      segments.push(cur);
+      cur = [];
+    }
+  });
+  if (cur.length) segments.push(cur);
+
+  const melds: MeldSpec[] = [];
+  let total = 0;
+  for (const seg of segments) {
+    if (seg.length < 3) continue;
+    // best[i] = seg[i..] için en iyi bölünme
+    const n = seg.length;
+    const best: { points: number; parts: { tiles: Tile[]; kind: MeldSpec["kind"]; points: number }[] }[] = Array(n + 1);
+    best[n] = { points: 0, parts: [] };
+    for (let i = n - 1; i >= 0; i--) {
+      best[i] = best[i + 1]; // seg[i] pere girmez
+      for (let j = i + 3; j <= n && j - i <= 13; j++) {
+        const tiles = seg.slice(i, j);
+        const r = validateMeld(tiles, okey, rules);
+        if (!r.ok) continue;
+        const pts = r.value.points + best[j].points;
+        if (pts > best[i].points) best[i] = { points: pts, parts: [{ tiles, kind: r.value.kind, points: r.value.points }, ...best[j].parts] };
+      }
+    }
+    for (const p of best[0].parts) {
+      melds.push({ tileIds: p.tiles.map((t) => t.id), kind: p.kind });
+      total += p.points;
+    }
+  }
+  return { melds, total };
+}
+
+/** Istakadaki dizilimden çiftleri çıkarır: bitişik taşlar ikişer ikişer geçerli çift oluşturuyorsa. */
+export function pairsFromRack(slots: (TileId | null)[], cols: number, hand: Tile[], okey: Face, rules: RuleProfile): [TileId, TileId][] {
+  const byId = new Map(hand.map((t) => [t.id, t]));
+  const out: [TileId, TileId][] = [];
+  const used = new Set<number>();
+  for (let i = 0; i < slots.length - 1; i++) {
+    if (used.has(i) || (i + 1) % cols === 0) continue;
+    const a = slots[i] ? byId.get(slots[i]!) : undefined;
+    const b = slots[i + 1] ? byId.get(slots[i + 1]!) : undefined;
+    if (!a || !b) continue;
+    if (validatePair(a, b, okey, rules).ok) {
+      out.push([a.id, b.id]);
+      used.add(i + 1);
+    }
+  }
+  return out;
 }

@@ -6,9 +6,10 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
  * taş çekme → skor tablosu → yeniden bağlanma → mobil dokunmatik sürükleme.
  */
 
+/** Hesapsız giriş: ana sayfadaki (?next=…) veya davet linkindeki takma ad formu. */
 async function guestLogin(page: Page, nick: string) {
-  await page.getByLabel("Takma ad").first().fill(nick);
-  await page.getByRole("button", { name: /Misafir olarak/ }).first().click();
+  await page.getByLabel(/Takma ad/).first().fill(nick);
+  await page.getByRole("button", { name: /Devam et|Masaya otur/ }).first().click();
 }
 
 async function rackIds(page: Page): Promise<string[]> {
@@ -32,10 +33,10 @@ test("kabul senaryosu: eşli, katlamalı, yardımlı 11 ellik özel oda – 4 ta
 
   // 1-6: Oyuncu A odayı oluşturur
   const A = await newPage(browser);
-  await A.goto("/");
-  await guestLogin(A, "Ayşe");
-  await A.waitForURL(/dashboard/);
   await A.goto("/rooms/create");
+  await A.waitForURL(/\?next=/);
+  await guestLogin(A, "Ayşe");
+  await A.waitForURL(/rooms\/create/);
   await A.getByLabel(/Oda adı/).fill("Kabul Masası");
   await A.getByRole("switch", { name: "Eşli 101" }).click();
   await A.getByRole("switch", { name: "Katlamalı" }).click();
@@ -104,12 +105,26 @@ test("kabul senaryosu: eşli, katlamalı, yardımlı 11 ellik özel oda – 4 ta
   // 16: sıradaki oyuncu desteden çeker ve onaylı taş atar
   let next: Page | null = null;
   for (const p of all) {
-    if (await p.getByRole("button", { name: "Taş çek", exact: true }).isVisible().catch(() => false)) next = p;
+    if (await p.getByRole("button", { name: "Ortadan çek", exact: true }).isVisible().catch(() => false)) next = p;
   }
   expect(next).not.toBeNull();
   // Atılan taş diğer oyunculara ulaşmıştır (gerçek zamanlı)
   await expect(next!.locator(`[data-tile-id="${droppedId}"]`).first()).toBeVisible();
-  await next!.getByRole("button", { name: "Taş çek", exact: true }).click();
+  // Yandan alma: atılan taşı sürükleyip ıstakada seçilen yuvaya bırak → zorunluluk uyarısı → geri bırak
+  const sideTile = next!.locator(`[data-anchor^="discard-"] [data-tile-id="${droppedId}"]`).first();
+  const slotIdx = await next!.locator("[data-slot]:not(:has([data-tile-id]))").nth(2).getAttribute("data-slot");
+  const slotBox = (await next!.locator(`[data-slot="${slotIdx}"]`).boundingBox())!;
+  await sideTile.hover();
+  await next!.mouse.down();
+  await next!.mouse.move(slotBox.x + slotBox.width / 2, slotBox.y + slotBox.height / 2, { steps: 12 });
+  await next!.mouse.up();
+  await expect.poll(async () => (await rackIds(next!)).length).toBe(22);
+  await expect(next!.locator(`[data-slot="${slotIdx}"] [data-tile-id="${droppedId}"]`)).toHaveCount(1);
+  await expect(next!.getByTestId("take-obligation")).toBeVisible();
+  await next!.getByRole("button", { name: /Geri bırak/ }).click();
+  await expect.poll(async () => (await rackIds(next!)).length).toBe(21);
+  // Ortadan çekme: desteye dokun
+  await next!.locator('[data-anchor="deck"]').click();
   await expect.poll(async () => (await rackIds(next!)).length).toBe(22);
   const pick = next!.locator("[data-slot] [data-tile-id]").first();
   await pick.click();
@@ -160,10 +175,10 @@ test("mobil: dokunmatik sürükleme ile ıstakada taş taşıma ve yardımsız m
     pages.push(await ctx.newPage());
   }
   const [M, ...rest] = pages;
-  await M.goto("/");
-  await guestLogin(M, "Mobil");
-  await M.waitForURL(/dashboard/);
   await M.goto("/rooms/create");
+  await M.waitForURL(/\?next=/);
+  await guestLogin(M, "Mobil");
+  await M.waitForURL(/rooms\/create/);
   await M.getByLabel(/Oda adı/).fill("Mobil Masa");
   await M.getByRole("switch", { name: "Yardımlı" }).click(); // yardımsız
   await M.getByRole("button", { name: /Oda(yı)? oluştur/ }).click();

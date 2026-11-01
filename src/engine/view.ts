@@ -54,6 +54,8 @@ export interface GameView {
     turnDeadline: number | null;
     myDrawnTileId: TileId | null;
     myTakeObligation: TileId | null;
+    indicatorTakenBy: Seat | null;
+    myIndicatorPending: boolean;
     requiredRunPoints: number;
     requiredPairCount: number;
     penalties: PenaltyRecord[];
@@ -104,6 +106,10 @@ export function getPlayerView(state: GameState, viewerSeat: Seat | null): GameVi
       turnDeadline: h.turnDeadline,
       myDrawnTileId: isMine(h.currentTurn) ? h.drawnTileId : null,
       myTakeObligation: isMine(h.currentTurn) ? h.takeObligation?.tileId ?? null : null,
+      /** Göstergeyi çift için alan oyuncu (çiftte kullanılmışsa da dolu kalır) */
+      indicatorTakenBy: h.indicatorTaken?.seat ?? null,
+      /** Gösterge elimde ve henüz çiftte kullanılmadı */
+      myIndicatorPending: viewerSeat !== null && h.indicatorTaken?.seat === viewerSeat && !h.indicatorTaken.inPair,
       requiredRunPoints: requiredRunPoints(state, thresholdSeat),
       requiredPairCount: requiredPairCount(state, thresholdSeat),
       penalties: h.penalties,

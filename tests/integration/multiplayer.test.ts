@@ -76,7 +76,7 @@ describe("Oda ve davet sistemi", () => {
     expect((await friendsOverview(F.user.id)).friends.map((f) => f.username)).toEqual(["gokhan"]);
     await expectAppError(sendFriendRequest(F.user, "gokhan"), "CONFLICT");
 
-    const room = await createRoom(F.user, { name: "Arkadaş Masası", visibility: "private" });
+    const room = await createRoom(F.user, { name: "Arkadaş Masası", visibility: "private", password: "4321" });
     // Arkadaş olmayan davet edilemez
     await expectAppError(inviteToRoom(room.code, F.user, D.user.id), "FORBIDDEN");
     // Reddedilen davet sonradan giriş belirteci olarak kullanılamaz
@@ -91,6 +91,15 @@ describe("Oda ve davet sistemi", () => {
     const view = await getRoom(room.code, G.user);
     expect(view.access === "full" && view.room.isMember).toBe(true);
     expect(await myInvitations(G.user.id)).toHaveLength(0);
+  });
+
+  it("şifresiz özel odaya oda koduyla katılınabilir", async () => {
+    const H = await makePlayer("Hakan");
+    const room = await createRoom(A.user, { name: "Kodlu Masa", visibility: "private" });
+    const view = await getRoom(room.code, H.user);
+    expect(view.access).toBe("full");
+    const joined = await joinRoom(room.code, H.user, {});
+    expect(joined.isMember).toBe(true);
   });
 
   it("iki kişi aynı koltuğu alamaz (eşzamanlı istekler)", async () => {

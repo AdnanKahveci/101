@@ -7,7 +7,8 @@ import {
   addTileToMeld,
   calculateOpeningPoints,
   isJoker,
-  playableTargets,
+  meldsFromRack,
+  pairsFromRack,
   prevSeat,
   replaceJokerInMeld,
   sortHand,
@@ -31,7 +32,9 @@ import { Dialog } from "@/components/ui/dialog";
 import { PageLoading } from "@/components/require-session";
 import { RACK_COLS, relativePositions, useGame } from "./store";
 import { Rack, type DropTarget } from "./rack";
-import { CenterPile, ConnectionIcon, DiscardPile, MeldView, PairView, PlayerBadge, seatName } from "./table";
+import { CenterPile, ConnectionIcon, DiscardPile, MeldView, OpponentRail, PairView, PlayerBadge, seatName } from "./table";
+import { FlightLayer, TableCaption } from "./effects";
+import { useFx } from "./fx";
 import { HandResultDialog, MatchEndDialog, ScoreBoard } from "./panels";
 
 function pref(key: string, fallback: boolean) {
@@ -72,7 +75,7 @@ export function GameClient({ matchId }: { matchId: string }) {
     api<{ view: ClientGameView }>(`/api/matches/${matchId}`)
       .then((r) => useGame.getState().setView(r.view))
       .catch((e: Error & { status?: number }) => {
-        if (e.status === 401) router.replace(`/login?next=/game/${matchId}`);
+        if (e.status === 401) router.replace(`/?next=/game/${matchId}`);
         else setError(e.message);
       });
     return () => {
@@ -81,6 +84,7 @@ export function GameClient({ matchId }: { matchId: string }) {
       realtime.unwatchMatch();
       release();
       useGame.getState().reset();
+      useFx.getState().clear();
     };
   }, [matchId, router]);
 
@@ -95,15 +99,17 @@ export function GameClient({ matchId }: { matchId: string }) {
     if (!view || !okey || !assisted) return null;
     const potential = tilesInPotentialMelds(view.myHand, okey, view.rules);
     const pairIds = new Set(suggestPairs(view.myHand, okey, view.rules).flat());
-    const targets = playableTargets(view.myHand, view.hand.melds, okey, view.rules);
-    return { potential, pairIds, targets };
+    return { potential, pairIds };
   }, [view, okey, assisted]);
 
   const highlights = useMemo(() => {
-    const h: Record<TileId, "joker" | "meld" | "pair" | null> = {};
+    const h: Record<TileId, "joker" | "meld" | "pair" | "fresh" | "taken" | null> = {};
     if (!view || !okey) return h;
     for (const t of view.myHand) {
-      if (assisted && isJoker(t, okey)) h[t.id] = "joker";
+      if (t.id === view.hand.myTakeObligation) h[t.id] = "taken";
+      else if (view.hand.myIndicatorPending && t.id === view.hand.indicator.id) h[t.id] = "fresh";
+      else if (t.id === view.hand.myDrawnTileId && view.hand.turnPhase === "awaitingAction") h[t.id] = "fresh";
+      else if (assisted && isJoker(t, okey)) h[t.id] = "joker";
       else if (assist?.potential.has(t.id)) h[t.id] = "meld";
       else if (assist?.pairIds.has(t.id)) h[t.id] = "pair";
     }
@@ -167,6 +173,85 @@ export function GameClient({ matchId }: { matchId: string }) {
     [view, okey, legal, act],
   );
 
+  /** Desteden çek / yandan al; slot verilirse taş ıstakada o yuvaya yerleşir. */
+  const take = useCallback(
+    async (type: "DRAW_TILE" | "TAKE_DISCARD", slot: number | null) => {
+      useGame.getState().setPendingSlot(slot);
+      const ok = await act({ type });
+      if (!ok) useGame.getState().setPendingSlot(null);
+    },
+    [act],
+  );
+
+  /** Göstergenin eşi eldeyse masadaki göstergeyi çift için ıstakaya al. */
+  const takeIndicator = useCallback(
+    async (slot: number | null) => {
+      useGame.getState().setPendingSlot(slot);
+      const ok = await act({ type: "TAKE_INDICATOR" });
+      if (!ok) useGame.getState().setPendingSlot(null);
+      else toast.info("Göstergeyi eşinin yanına koyun ve “Çift aç”a basın.");
+    },
+    [act],
+  );
+
+  /** Istakadaki dizilim (veya hazırlanan perler) ile seri aç. */
+  const rackMelds = useMemo(() => {
+    if (!view || !okey) return null;
+    return meldsFromRack(g.slots, RACK_COLS, view.myHand, okey, view.rules);
+  }, [view, okey, g.slots]);
+
+  const openMelds = useCallback(async () => {
+    if (!view || !okey) return;
+    if (stagedMelds.length > 0) {
+      await act({ type: "OPEN_MELDS", melds: stagedMelds });
+      return;
+    }
+    const found = rackMelds ?? { melds: [], total: 0 };
+    let melds = found.melds;
+    // En az bir taş elde kalmalı: gerekiyorsa en küçük peri çıkar.
+    while (melds.length && melds.reduce((n, m) => n + m.tileIds.length, 0) >= view.myHand.length) melds = melds.slice(0, -1);
+    if (melds.length === 0) {
+      toast.error("Istakada dizili per bulunamadı. Perleri yan yana dizin, aralarına boşluk bırakın.");
+      return;
+    }
+    const me = view.players.find((p) => p.seat === view.mySeat);
+    if (!me?.opened) {
+      const map = tilesMap(view.myHand);
+      const calc = calculateOpeningPoints(melds, map, okey, view.rules);
+      const total = calc.ok ? calc.value.total : 0;
+      if (total < view.hand.requiredRunPoints) {
+        toast.error(`Dizili perler ${total} puan; açmak için en az ${view.hand.requiredRunPoints} gerekiyor.`);
+        return;
+      }
+      const ob = view.hand.myTakeObligation;
+      if (ob && !melds.some((m) => m.tileIds.includes(ob))) {
+        toast.error("Yandan aldığınız taş dizili perlerin içinde olmalı.");
+        return;
+      }
+    }
+    await act({ type: "OPEN_MELDS", melds });
+  }, [view, okey, stagedMelds, rackMelds, act]);
+
+  const openPairs = useCallback(async () => {
+    if (!view || !okey) return;
+    let pairs = stagedPairs.length > 0 ? stagedPairs : pairsFromRack(g.slots, RACK_COLS, view.myHand, okey, view.rules);
+    while (pairs.length * 2 >= view.myHand.length) pairs = pairs.slice(0, -1);
+    if (pairs.length === 0) {
+      toast.error("Istakada yan yana dizili çift bulunamadı.");
+      return;
+    }
+    if (view.hand.myIndicatorPending && !pairs.some((p) => p.includes(view.hand.indicator.id))) {
+      toast.error("Göstergeyi eşinin hemen yanına koyun; gösterge açtığınız çiftlerde olmalı.");
+      return;
+    }
+    const me = view.players.find((p) => p.seat === view.mySeat);
+    if (!me?.opened && pairs.length < view.hand.requiredPairCount) {
+      toast.error(`${pairs.length} çift dizili; açmak için en az ${view.hand.requiredPairCount} çift gerekiyor.`);
+      return;
+    }
+    await act({ type: "OPEN_PAIRS", pairs });
+  }, [view, okey, stagedPairs, g.slots, act]);
+
   const onDropOutside = useCallback(
     (tileId: TileId, target: DropTarget) => {
       if (!view) return;
@@ -192,8 +277,8 @@ export function GameClient({ matchId }: { matchId: string }) {
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-2xl font-black">Maç açılamadı</h1>
         <p className="mt-2 text-white/60">{error}</p>
-        <Button className="mt-6" onClick={() => router.push("/dashboard")}>
-          Panele dön
+        <Button className="mt-6" onClick={() => router.push("/")}>
+          Ana sayfaya dön
         </Button>
       </main>
     );
@@ -205,9 +290,8 @@ export function GameClient({ matchId }: { matchId: string }) {
   const isMyTurn = view.phase === "playing" && view.hand.currentTurn === mySeat;
   const leftSeat = prevSeat(pos.bottom);
   const selectedOne = selected.length === 1 ? selected[0] : null;
-  const meldTargets = new Set(
-    addMode && selectedOne && assist?.targets[selectedOne] ? assist.targets[selectedOne] : [],
-  );
+  // İşlek taşlar gösterilmez: hangi pere işlenebileceğini oyuncu kendisi görmeli.
+  const meldTargets = new Set<string>();
   const opened = me?.opened ?? null;
   const required = { run: view.hand.requiredRunPoints, pairs: view.hand.requiredPairCount };
   const meldsByOwner = ([pos.bottom, pos.right, pos.top, pos.left] as Seat[]).map((s) => ({
@@ -247,15 +331,19 @@ export function GameClient({ matchId }: { matchId: string }) {
     else toast.info("Açılabilecek per veya çift bulunamadı.");
   };
 
+  const obligation = view.hand.myTakeObligation;
+  const rightSeat = pos.right;
+
   return (
     <LayoutGroup>
-      <div className="felt fixed inset-0 flex flex-col overflow-hidden">
+      <div className="kiraathane fixed inset-0 flex flex-col overflow-hidden">
         {/* Üst çubuk */}
-        <div className="flex items-center gap-2 bg-felt-950/70 px-2 py-1.5 text-xs sm:text-sm">
-          <span className="font-black">
+        <div className="relative z-10 flex items-center gap-2 bg-black/45 px-2 py-1.5 text-xs backdrop-blur-sm sm:text-sm">
+          <span className="rounded-md bg-gold/90 px-2 py-0.5 font-black text-felt-950">
             El {view.hand.handNumber}/{view.rules.totalHands}
           </span>
-          <span className="hidden text-white/60 sm:inline">{view.rules.profileName}</span>
+          <span className="hidden text-white/70 sm:inline">{view.rules.profileName}</span>
+          <span className="hidden text-white/50 sm:inline">Kod: <b className="font-mono tracking-wider text-white/80">{view.roomCode}</b></span>
           <span className="ml-auto flex items-center gap-1">
             <ConnectionIcon status={status} />
             <Button size="sm" variant="secondary" onClick={() => setScoreOpen(true)} aria-label="Skor tablosu">
@@ -287,112 +375,158 @@ export function GameClient({ matchId }: { matchId: string }) {
             </button>
           </span>
         </div>
+        <div className="vitray" aria-hidden />
         {status !== "open" && (
-          <div className="bg-amber-500/90 px-3 py-1 text-center text-xs font-bold text-felt-950" role="status">
+          <div className="relative z-10 bg-amber-500/90 px-3 py-1 text-center text-xs font-bold text-felt-950" role="status">
             {status === "offline" ? "Bağlantı yok – oturum veya internet bağlantınızı kontrol edin." : "Bağlantı yeniden kuruluyor… Oyun durumu korunuyor."}
           </div>
         )}
 
         {/* Masa */}
-        <div className="relative grid min-h-0 flex-1 grid-cols-[auto_1fr_auto] grid-rows-[auto_1fr_auto] gap-1 p-1 sm:gap-2 sm:p-2">
-          <div className="col-start-2 row-start-1 flex justify-center">
-            <PlayerBadge view={view} seat={pos.top} position="top" online={presence[pos.top] ?? false} />
+        <div className="relative mx-auto mt-1 w-full max-w-[1200px] min-h-0 flex-1 px-1 sm:mt-2 sm:px-6">
+          <div className="table-shell" aria-hidden>
+            <div className="table-felt" />
           </div>
-          <div className="col-start-1 row-start-2 flex flex-col items-center justify-center gap-2">
-            <PlayerBadge view={view} seat={pos.left} position="left" online={presence[pos.left] ?? false} />
-            <DiscardPile
-              tiles={view.hand.discards[leftSeat]}
-              okey={okey}
-              label={`${seatName(view, leftSeat)} attığı taşlar`}
-              takeable={isMyTurn && legal.has("TAKE_DISCARD")}
-              onTake={() => act({ type: "TAKE_DISCARD" })}
-            />
-          </div>
-          <div className="col-start-3 row-start-2 flex flex-col items-center justify-center gap-2">
-            <PlayerBadge view={view} seat={pos.right} position="right" online={presence[pos.right] ?? false} />
-            <DiscardPile tiles={view.hand.discards[pos.right]} okey={okey} label={`${seatName(view, pos.right)} attığı taşlar`} />
-          </div>
-
-          {/* Orta alan: deste, gösterge, perler */}
-          <div className="col-start-2 row-start-2 flex min-h-0 flex-col items-center gap-2 overflow-hidden">
-            <div className="flex items-center gap-4">
-              <DiscardPile tiles={view.hand.discards[pos.top]} okey={okey} label={`${seatName(view, pos.top)} attığı taşlar`} />
-              <CenterPile view={view} canDraw={isMyTurn && legal.has("DRAW_TILE")} onDraw={() => act({ type: "DRAW_TILE" })} />
+          <TableCaption />
+          <div className="relative grid h-full grid-cols-[auto_1fr_auto] grid-rows-[auto_1fr_auto] gap-1 p-3 sm:gap-2 sm:p-6">
+            {/* Üst sıra: sol üst köşe = karşıdakinin attıkları, üst oyuncu, sağ üst köşe = sağdakinin attıkları */}
+            <div className="col-start-1 row-start-1 flex items-start justify-start">
+              <DiscardPile seat={pos.top} tiles={view.hand.discards[pos.top]} okey={okey} label={`${seatName(view, pos.top)} attığı taşlar`} />
             </div>
-            <div className="w-full min-h-0 flex-1 overflow-y-auto rounded-xl bg-black/10 p-1.5" aria-label="Açılmış perler">
-              {view.hand.melds.length === 0 && view.hand.pairs.length === 0 ? (
-                <p className="py-4 text-center text-xs text-white/40">Henüz açan yok</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {meldsByOwner
-                    .filter((o) => o.melds.length || o.pairs.length)
-                    .map((o) => (
-                      <div key={o.seat}>
-                        <p className="mb-0.5 text-[10px] font-bold text-white/60">{seatName(view, o.seat)}</p>
-                        <div className="flex flex-wrap gap-1">
-                          {o.melds.map((m) => (
-                            <MeldView
-                              key={m.id}
-                              meld={m}
-                              okey={okey}
-                              ownerName={seatName(view, o.seat)}
-                              target={meldTargets.has(m.id)}
-                              onClick={addMode && selectedOne ? () => tryAddToMeld(selectedOne, m.id) : undefined}
-                            />
-                          ))}
-                          {o.pairs.map((p) => (
-                            <PairView key={p.id} pair={p} okey={okey} />
-                          ))}
+            <div className="col-start-2 row-start-1 flex flex-col items-center gap-1">
+              <PlayerBadge view={view} seat={pos.top} position="top" online={presence[pos.top] ?? false} />
+              <OpponentRail count={view.players.find((p) => p.seat === pos.top)?.tileCount ?? 0} orientation="horizontal" />
+            </div>
+            <div className="col-start-3 row-start-1 flex items-start justify-end">
+              <DiscardPile seat={rightSeat} tiles={view.hand.discards[rightSeat]} okey={okey} label={`${seatName(view, rightSeat)} attığı taşlar`} />
+            </div>
+
+            {/* Orta sıra */}
+            <div className="col-start-1 row-start-2 flex items-center gap-1">
+              <PlayerBadge view={view} seat={pos.left} position="left" online={presence[pos.left] ?? false} />
+              <OpponentRail count={view.players.find((p) => p.seat === pos.left)?.tileCount ?? 0} orientation="vertical" />
+            </div>
+            <div className="col-start-2 row-start-2 flex min-h-0 flex-col items-center gap-2 overflow-hidden">
+              <CenterPile
+                view={view}
+                canDraw={isMyTurn && legal.has("DRAW_TILE") && !busy}
+                onDraw={(slot) => take("DRAW_TILE", slot)}
+                canTakeIndicator={isMyTurn && legal.has("TAKE_INDICATOR") && !busy}
+                onTakeIndicator={takeIndicator}
+              />
+              <div className="w-full min-h-0 flex-1 overflow-y-auto rounded-xl p-1.5" aria-label="Açılmış perler">
+                {view.hand.melds.length === 0 && view.hand.pairs.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-white/35">Henüz açan yok</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {meldsByOwner
+                      .filter((o) => o.melds.length || o.pairs.length)
+                      .map((o) => (
+                        <div key={o.seat}>
+                          <p className="mb-0.5 text-[10px] font-bold text-white/60">{seatName(view, o.seat)}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {o.melds.map((m) => (
+                              <MeldView
+                                key={m.id}
+                                meld={m}
+                                okey={okey}
+                                ownerName={seatName(view, o.seat)}
+                                target={meldTargets.has(m.id)}
+                                onClick={addMode && selectedOne ? () => tryAddToMeld(selectedOne, m.id) : undefined}
+                              />
+                            ))}
+                            {o.pairs.map((p) => (
+                              <PairView key={p.id} pair={p} okey={okey} />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="col-start-3 row-start-2 flex items-center justify-end gap-1">
+              <OpponentRail count={view.players.find((p) => p.seat === pos.right)?.tileCount ?? 0} orientation="vertical" />
+              <PlayerBadge view={view} seat={pos.right} position="right" online={presence[pos.right] ?? false} />
+            </div>
+
+            {/* Alt sıra: sol alt köşe = soldakinin attıkları (benim alabileceğim), ben, sağ alt köşe = benim atma alanım */}
+            <div className="col-start-1 row-start-3 flex items-end justify-start">
+              <DiscardPile
+                seat={leftSeat}
+                tiles={view.hand.discards[leftSeat]}
+                okey={okey}
+                label={`${seatName(view, leftSeat)} attığı taşlar`}
+                takeable={isMyTurn && legal.has("TAKE_DISCARD") && !busy}
+                onTake={(slot) => take("TAKE_DISCARD", slot)}
+                hint={isMyTurn && legal.has("TAKE_DISCARD") ? "Yandan al" : undefined}
+              />
+            </div>
+            <div className="col-start-2 row-start-3 flex min-w-0 flex-wrap items-end justify-center gap-2">
+              <PlayerBadge view={view} seat={pos.bottom} position="bottom" online={status === "open"} />
+              {(assisted || stagedMelds.length > 0 || stagedPairs.length > 0 || obligation) && (
+                <div className="flex min-w-0 flex-wrap items-center justify-center gap-1 text-[11px]">
+                  {view.hand.myIndicatorPending && (
+                    <span className="rounded bg-amber-500/90 px-2 py-0.5 font-bold text-felt-950" data-testid="indicator-pending">
+                      Göstergeyi eşiyle yan yana koyup çift açın – açmayacaksanız geri bırakın
+                    </span>
+                  )}
+                  {obligation && (
+                    <span className="rounded bg-amber-500/90 px-2 py-0.5 font-bold text-felt-950" data-testid="take-obligation">
+                      {opened ? "Yandan aldığınız taşı işleyin veya perde kullanın" : `Yandan aldığınız taşla ${required.run} geçen seriyi açın – açamıyorsanız geri bırakın`}
+                    </span>
+                  )}
+                  {assisted && view.phase === "playing" && !opened && !obligation && (
+                    <span className="rounded bg-black/40 px-2 py-0.5 font-bold" data-testid="threshold">
+                      Baraj: {required.run} puan / {required.pairs} çift
+                    </span>
+                  )}
+                  {stagedMelds.map((m, i) => (
+                    <span key={i} className="flex items-center gap-1 rounded bg-emerald-900/70 px-1.5 py-0.5">
+                      Per {i + 1} ({m.tileIds.length})
+                      <button aria-label="Peri kaldır" onClick={() => g.unstageMeld(i)}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {stagedPairs.map((p, i) => (
+                    <span key={i} className="flex items-center gap-1 rounded bg-sky-900/70 px-1.5 py-0.5">
+                      Çift {i + 1}
+                      <button aria-label="Çifti kaldır" onClick={() => g.unstagePair(i)}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {assisted && staged && stagedMelds.length > 0 && (
+                    <span className={cn("rounded px-2 py-0.5 font-black", staged.melds.ok && staged.melds.value.total >= required.run ? "bg-emerald-500 text-white" : "bg-red-500/80")} data-testid="staged-points">
+                      {staged.melds.ok ? `${staged.melds.value.total} puan` : staged.melds.error}
+                    </span>
+                  )}
+                  {assisted && staged && stagedPairs.length > 0 && !staged.pairs.ok && <span className="rounded bg-red-500/80 px-2 py-0.5">{staged.pairs.error}</span>}
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="col-span-3 row-start-3 flex items-end justify-between gap-2 px-1">
-            <PlayerBadge view={view} seat={pos.bottom} position="bottom" online={status === "open"} />
-            {(assisted || stagedMelds.length > 0 || stagedPairs.length > 0) && (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-1 text-[11px]">
-                {assisted && view.phase === "playing" && !opened && (
-                  <span className="rounded bg-black/30 px-2 py-0.5 font-bold" data-testid="threshold">
-                    Baraj: {required.run} puan / {required.pairs} çift
-                  </span>
-                )}
-                {stagedMelds.map((m, i) => (
-                  <span key={i} className="flex items-center gap-1 rounded bg-emerald-900/60 px-1.5 py-0.5">
-                    Per {i + 1} ({m.tileIds.length})
-                    <button aria-label="Peri kaldır" onClick={() => g.unstageMeld(i)}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {stagedPairs.map((p, i) => (
-                  <span key={i} className="flex items-center gap-1 rounded bg-sky-900/60 px-1.5 py-0.5">
-                    Çift {i + 1}
-                    <button aria-label="Çifti kaldır" onClick={() => g.unstagePair(i)}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {assisted && staged && stagedMelds.length > 0 && (
-                  <span className={cn("rounded px-2 py-0.5 font-black", staged.melds.ok && staged.melds.value.total >= required.run ? "bg-emerald-500 text-white" : "bg-red-500/80")} data-testid="staged-points">
-                    {staged.melds.ok ? `${staged.melds.value.total} puan` : staged.melds.error}
-                  </span>
-                )}
-                {assisted && staged && stagedPairs.length > 0 && !staged.pairs.ok && <span className="rounded bg-red-500/80 px-2 py-0.5">{staged.pairs.error}</span>}
-              </div>
-            )}
-            <DiscardPile tiles={view.hand.discards[pos.bottom]} okey={okey} label="Taş atma alanı (sürükleyip bırakın)" dropTarget />
+            <div className="col-start-3 row-start-3 flex items-end justify-end">
+              <DiscardPile seat={pos.bottom} tiles={view.hand.discards[pos.bottom]} okey={okey} label="Taş atma alanı (sürükleyip bırakın)" dropTarget />
+            </div>
           </div>
         </div>
 
         {/* Aksiyonlar */}
         {mySeat !== null && view.phase === "playing" && (
-          <div className="flex flex-wrap items-center justify-center gap-1 bg-felt-950/70 px-1 py-1" data-testid="actions">
-            {legal.has("DRAW_TILE") && <Button size="sm" onClick={() => act({ type: "DRAW_TILE" })} disabled={busy}>Taş çek</Button>}
-            {legal.has("TAKE_DISCARD") && <Button size="sm" variant="secondary" onClick={() => act({ type: "TAKE_DISCARD" })} disabled={busy}>Yandan al</Button>}
+          <div className="relative z-10 flex flex-wrap items-center justify-center gap-1 px-1 py-1" data-testid="actions">
+            {legal.has("DRAW_TILE") && <Button size="sm" onClick={() => take("DRAW_TILE", null)} disabled={busy}>Ortadan çek</Button>}
+            {legal.has("TAKE_DISCARD") && <Button size="sm" variant="secondary" onClick={() => take("TAKE_DISCARD", null)} disabled={busy}>Yandan al</Button>}
+            {legal.has("TAKE_INDICATOR") && (
+              <Button size="sm" variant="secondary" onClick={() => takeIndicator(null)} disabled={busy}>
+                Göstergeyi al
+              </Button>
+            )}
+            {legal.has("RETURN_INDICATOR") && (
+              <Button size="sm" variant="danger" onClick={() => act({ type: "RETURN_INDICATOR" })} disabled={busy}>
+                Göstergeyi geri bırak
+              </Button>
+            )}
             {legal.has("RETURN_DISCARD") && (
               <Button size="sm" variant="danger" onClick={() => act({ type: "RETURN_DISCARD" })} disabled={busy}>
                 Geri bırak{view.rules.penaltiesEnabled ? ` (+${view.rules.failedTakePenalty})` : ""}
@@ -400,16 +534,23 @@ export function GameClient({ matchId }: { matchId: string }) {
             )}
             {legal.has("OPEN_MELDS") && (
               <>
-                <Button size="sm" variant="secondary" onClick={g.stageMeld} disabled={selected.length < 3}>Per oluştur</Button>
-                <Button size="sm" variant="success" disabled={busy || stagedMelds.length === 0} onClick={() => act({ type: "OPEN_MELDS", melds: stagedMelds })}>
+                {selected.length >= 3 && (
+                  <Button size="sm" variant="secondary" onClick={g.stageMeld}>Per oluştur</Button>
+                )}
+                <Button size="sm" variant="success" disabled={busy} onClick={openMelds} data-testid="open-melds">
                   {opened ? "Per aç" : "Seri aç"}
+                  {assisted && stagedMelds.length === 0 && rackMelds && rackMelds.total > 0 && (
+                    <span className="ml-1 rounded bg-black/25 px-1 text-[11px]">{rackMelds.total}</span>
+                  )}
                 </Button>
               </>
             )}
             {legal.has("OPEN_PAIRS") && (
               <>
-                <Button size="sm" variant="secondary" onClick={g.stagePair} disabled={selected.length !== 2}>Çift oluştur</Button>
-                <Button size="sm" variant="success" disabled={busy || stagedPairs.length === 0} onClick={() => act({ type: "OPEN_PAIRS", pairs: stagedPairs })}>
+                {selected.length === 2 && (
+                  <Button size="sm" variant="secondary" onClick={g.stagePair}>Çift oluştur</Button>
+                )}
+                <Button size="sm" variant="success" disabled={busy} onClick={openPairs}>
                   Çift aç
                 </Button>
               </>
@@ -452,10 +593,11 @@ export function GameClient({ matchId }: { matchId: string }) {
         {mySeat !== null ? (
           <Rack tiles={view.myHand} okey={okey} highlights={highlights} showJokerMark={assisted} onDropOutside={onDropOutside} />
         ) : (
-          <div className="bg-felt-950/80 p-3 text-center text-sm text-white/60">Seyirci modundasınız. Oyuncuların taşları gizlidir.</div>
+          <div className="rack-stand p-3 text-center text-sm text-white/80">Seyirci modundasınız. Oyuncuların taşları gizlidir.</div>
         )}
       </div>
 
+      <FlightLayer okey={okey} />
       <ScoreBoard view={view} open={scoreOpen} onClose={() => setScoreOpen(false)} />
       {view.phase === "handResult" && <HandResultDialog view={view} busy={busy} onReady={() => act({ type: "READY_NEXT_HAND" })} />}
       {view.phase === "finished" && (
@@ -470,7 +612,7 @@ export function GameClient({ matchId }: { matchId: string }) {
             }
             router.push(`/room/${view.roomCode}`);
           }}
-          onHome={() => router.push("/dashboard")}
+          onHome={() => router.push("/")}
         />
       )}
       <Dialog open={confirmDiscard !== null} onClose={() => setConfirmDiscard(null)} title={view.myHand.length === 1 ? "Eli bitir" : "Taş at"}>
@@ -478,9 +620,6 @@ export function GameClient({ matchId }: { matchId: string }) {
           <div className="space-y-4">
             <p className="text-sm text-white/80">
               {view.myHand.length === 1 ? "Son taşınızı atarak eli bitirmek istiyor musunuz?" : "Seçili taşı atmak istiyor musunuz?"}
-              {assisted && assist?.targets[confirmDiscard] && view.rules.penaltiesEnabled && (
-                <b className="mt-1 block text-red-300">Dikkat: Bu taş masadaki bir pere işlenebilir (işlek taş cezası +{view.rules.discardPlayablePenalty}).</b>
-              )}
               {isJoker(view.myHand.find((t) => t.id === confirmDiscard)!, okey) && view.myHand.length > 1 && view.rules.penaltiesEnabled && (
                 <b className="mt-1 block text-red-300">Dikkat: Okey atıyorsunuz (+{view.rules.discardJokerPenalty} ceza).</b>
               )}
@@ -540,7 +679,16 @@ function JokerReplaceDialog({
   const others = (stagedMelds[0]?.tileIds ?? selected).filter((id) => id !== state.tileId);
   return (
     <Dialog open onClose={onClose} title="Okeyi nereye koyacaksınız?">
-      <p className="mb-3 text-sm text-white/70">Geri aldığınız okey aynı hamlede kullanılmalıdır.</p>
+      <p className="mb-3 text-sm text-white/70">
+        Geri aldığınız okey aynı hamlede kullanılmalıdır.
+        {view.rules.penaltiesEnabled &&
+          meld.owner !== view.mySeat &&
+          (!view.rules.teamMode || meld.owner % 2 !== (view.mySeat ?? 0) % 2) && (
+            <b className="mt-1 block text-amber-300">
+              {seatName(view, meld.owner)} oyuncusuna +{view.rules.jokerTakenPenalty ?? 101} ceza yazılacak (perindeki okey alınıyor).
+            </b>
+          )}
+      </p>
       <div className="space-y-2">
         {options.slice(0, 8).map((o) => (
           <Button

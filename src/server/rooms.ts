@@ -8,6 +8,7 @@ import { getInfra } from "./infra";
 import { onlineMap, publish, roomChannel, userChannel } from "./channels";
 import { parseRoomSettings, settingsToRules, type RoomSettings } from "./validation";
 import { createMatchInTx, loadState } from "./game-service";
+import { BOT_PREFIX, fillWithBots } from "./bots";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const SEAT_LABELS = ["Alt", "Sağ", "Üst", "Sol"] as const;
@@ -27,6 +28,7 @@ export interface RoomMemberView {
   ready: boolean;
   online: boolean;
   isOwner: boolean;
+  isBot: boolean;
 }
 
 export interface RoomView {
@@ -65,6 +67,7 @@ async function members(roomId: string) {
       displayName: schema.users.displayName,
       avatar: schema.users.avatar,
       isGuest: schema.users.isGuest,
+      username: schema.users.username,
       joinedAt: schema.roomMembers.joinedAt,
     })
     .from(schema.roomMembers)
@@ -104,9 +107,10 @@ async function buildView(room: RoomRow, viewerId: string | null): Promise<RoomVi
       avatar: m.avatar,
       isGuest: m.isGuest,
       seat: m.seat,
-      ready: m.ready,
-      online: online[m.userId] ?? false,
+      ready: m.ready || m.username.startsWith(BOT_PREFIX),
+      online: m.username.startsWith(BOT_PREFIX) || (online[m.userId] ?? false),
       isOwner: m.userId === room.ownerId,
+      isBot: m.username.startsWith(BOT_PREFIX),
     })),
     inviteToken: isMember ? room.inviteToken : null,
     isMember,
@@ -177,7 +181,8 @@ export function isUniqueViolation(e: unknown, constraint?: string): boolean {
 export async function getRoom(code: string, viewer: AuthUser | null, token?: string | null) {
   const room = await roomByCode(code);
   const view = await buildView(room, viewer?.id ?? null);
-  if (view.isMember || room.visibility === "public" || (token && token === room.inviteToken)) {
+  // Özel oda = listede görünmez; oda kodunu bilen katılabilir (şifreli odalar hariç).
+  if (view.isMember || room.visibility === "public" || !room.passwordHash || (token && token === room.inviteToken)) {
     return { access: "full" as const, room: view, needsPassword: !view.isMember && !!room.passwordHash && token !== room.inviteToken };
   }
   return {
@@ -214,9 +219,6 @@ export async function joinRoom(
     if (invited) await db.update(schema.roomInvitations).set({ status: "accepted" }).where(eq(schema.roomInvitations.id, inv!.id));
   }
   const tokenOk = !!input.token && input.token === room.inviteToken;
-  if (room.visibility === "private" && !tokenOk && !invited && !room.passwordHash) {
-    fail("FORBIDDEN", "Bu özel odaya yalnızca davet linkiyle katılabilirsiniz.");
-  }
   if (room.passwordHash && !tokenOk && !invited) {
     if (!input.password || !(await verifyPassword(input.password, room.passwordHash))) fail("FORBIDDEN", "Oda şifresi hatalı.");
   }
@@ -364,12 +366,18 @@ export async function startMatch(code: string, owner: AuthUser): Promise<{ match
     try {
       return await db.transaction(async (tx) => {
         const seated = await tx
-          .select({ userId: schema.roomMembers.userId, seat: schema.roomMembers.seat, ready: schema.roomMembers.ready, displayName: schema.users.displayName })
+          .select({
+            userId: schema.roomMembers.userId,
+            seat: schema.roomMembers.seat,
+            ready: schema.roomMembers.ready,
+            displayName: schema.users.displayName,
+            username: schema.users.username,
+          })
           .from(schema.roomMembers)
           .innerJoin(schema.users, eq(schema.users.id, schema.roomMembers.userId))
           .where(and(eq(schema.roomMembers.roomId, room.id), isNotNull(schema.roomMembers.seat)));
         if (seated.length !== 4) fail("BAD_REQUEST", "Maçı başlatmak için dört oyuncunun oturması gerekir.");
-        const notReady = seated.filter((s) => !s.ready && s.userId !== owner.id);
+        const notReady = seated.filter((s) => !s.ready && s.userId !== owner.id && !s.username.startsWith(BOT_PREFIX));
         if (notReady.length) fail("BAD_REQUEST", `Henüz hazır olmayan oyuncular: ${notReady.map((s) => s.displayName).join(", ")}`);
         const rules = settingsToRules(room.settings as RoomSettings);
         const state = await createMatchInTx(
@@ -393,6 +401,30 @@ export async function startMatch(code: string, owner: AuthUser): Promise<{ match
   await loadState(matchId, { fresh: true }); // önbelleği ısıt
   await notifyRoom(room.id, { navigateToMatch: matchId });
   return { matchId };
+}
+
+/** Oda sahibi boş koltukları botlarla doldurur (tek başına deneme / eksik kişiyle oynama). */
+export async function addBots(code: string, owner: AuthUser): Promise<RoomView> {
+  const room = await roomByCode(code);
+  if (room.ownerId !== owner.id) fail("FORBIDDEN", "Bot eklemeyi yalnızca oda sahibi yapabilir.");
+  requireLobby(room);
+  const current = await members(room.id);
+  await fillWithBots(room.id, current.map((m) => m.displayName));
+  await notifyRoom(room.id);
+  return buildView(room, owner.id);
+}
+
+/** Oda sahibi bir botu odadan çıkarır. */
+export async function removeBot(code: string, owner: AuthUser, botUserId: string): Promise<RoomView> {
+  const room = await roomByCode(code);
+  if (room.ownerId !== owner.id) fail("FORBIDDEN", "Botları yalnızca oda sahibi çıkarabilir.");
+  requireLobby(room);
+  const db = await getDb();
+  const [u] = await db.select({ username: schema.users.username }).from(schema.users).where(eq(schema.users.id, botUserId)).limit(1);
+  if (!u?.username.startsWith(BOT_PREFIX)) fail("BAD_REQUEST", "Bu oyuncu bot değil.");
+  await db.delete(schema.roomMembers).where(and(eq(schema.roomMembers.roomId, room.id), eq(schema.roomMembers.userId, botUserId)));
+  await notifyRoom(room.id);
+  return buildView(room, owner.id);
 }
 
 export async function leaveRoom(code: string, user: AuthUser): Promise<{ left: boolean; seatKept: boolean }> {

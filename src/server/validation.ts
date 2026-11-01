@@ -89,6 +89,8 @@ export const gameActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("DRAW_TILE") }),
   z.object({ type: z.literal("TAKE_DISCARD") }),
   z.object({ type: z.literal("RETURN_DISCARD") }),
+  z.object({ type: z.literal("TAKE_INDICATOR") }),
+  z.object({ type: z.literal("RETURN_INDICATOR") }),
   z.object({ type: z.literal("OPEN_MELDS"), melds: z.array(meldSpec).min(1).max(8) }),
   z.object({ type: z.literal("OPEN_PAIRS"), pairs: z.array(z.tuple([tileId, tileId])).min(1).max(11) }),
   z.object({ type: z.literal("ADD_TO_MELD"), meldId: z.string().max(16), tileId, side: z.enum(["start", "end"]).optional() }),

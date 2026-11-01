@@ -6,6 +6,7 @@ import { realtime } from "@/lib/realtime";
 import { newCommandId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { play } from "@/lib/sound";
+import { animateTransition } from "./fx";
 
 export const RACK_COLS = 15;
 export const RACK_SLOTS = RACK_COLS * 2;
@@ -20,6 +21,9 @@ interface GameStore {
   stagedPairs: [TileId, TileId][];
   busy: boolean;
   presence: Record<number, boolean>;
+  /** Oyuncu çektiği/aldığı taşı sürükleyip belirli bir yuvaya bıraktıysa o yuva */
+  pendingSlot: number | null;
+  setPendingSlot: (slot: number | null) => void;
   setView: (v: ClientGameView) => void;
   setPresence: (p: Record<number, boolean>) => void;
   toggleSelect: (id: TileId) => void;
@@ -57,7 +61,7 @@ function saveSlots(v: ClientGameView | null, slots: Slots) {
 }
 
 /** Oyuncunun özel ıstaka dizilimini korur: gelen taşlar boş yuvalara, giden taşlar kaldırılır. */
-function reconcile(prev: Slots, hand: TileId[], drawn: TileId | null): Slots {
+function reconcile(prev: Slots, hand: TileId[], drawn: TileId | null, preferred: number | null = null): Slots {
   const set = new Set(hand);
   const slots = prev.map((id) => (id && set.has(id) ? id : null));
   const placed = new Set(slots.filter(Boolean) as TileId[]);
@@ -65,7 +69,27 @@ function reconcile(prev: Slots, hand: TileId[], drawn: TileId | null): Slots {
   for (const id of missing) {
     // Çekilen taş: son dolu yuvanın hemen sağına; diğerleri ilk boş yuvaya.
     let idx = -1;
-    if (id === drawn) {
+    if ((id === drawn || missing.length === 1) && preferred !== null && preferred >= 0 && preferred < RACK_SLOTS) {
+      if (!slots[preferred]) idx = preferred;
+      else {
+        // Dolu yuvaya bırakıldı: aynı sıradaki taşları sağa (yoksa sola) kaydırarak yer aç.
+        const rowStart = Math.floor(preferred / RACK_COLS) * RACK_COLS;
+        const rowEnd = rowStart + RACK_COLS - 1;
+        let gap = -1;
+        for (let i = preferred + 1; i <= rowEnd; i++) if (!slots[i]) { gap = i; break; }
+        if (gap >= 0) {
+          for (let i = gap; i > preferred; i--) slots[i] = slots[i - 1];
+          idx = preferred;
+        } else {
+          for (let i = preferred - 1; i >= rowStart; i--) if (!slots[i]) { gap = i; break; }
+          if (gap >= 0) {
+            for (let i = gap; i < preferred; i++) slots[i] = slots[i + 1];
+            idx = preferred;
+          }
+        }
+      }
+    }
+    if (idx < 0 && id === drawn) {
       const last = slots.reduce((acc, s, i) => (s ? i : acc), -1);
       for (let i = last + 1; i < RACK_SLOTS; i++) if (!slots[i]) { idx = i; break; }
     }
@@ -84,6 +108,8 @@ export const useGame = create<GameStore>((set, get) => ({
   stagedPairs: [],
   busy: false,
   presence: {},
+  pendingSlot: null,
+  setPendingSlot: (slot) => set({ pendingSlot: slot }),
 
   setView: (v) => {
     const prev = get().view;
@@ -91,12 +117,16 @@ export const useGame = create<GameStore>((set, get) => ({
     const newHand = !prev || prev.matchId !== v.matchId || prev.hand.handNumber !== v.hand.handNumber;
     const base = newHand ? loadSlots(v) ?? Array(RACK_SLOTS).fill(null) : get().slots;
     const hand = v.myHand.map((t) => t.id);
-    const slots = reconcile(base, hand, v.hand.myDrawnTileId);
+    const pendingSlot = get().pendingSlot;
+    const baseSet = new Set(base.filter(Boolean) as TileId[]);
+    const arrived = !newHand && v.myHand.some((t) => !baseSet.has(t.id));
+    const slots = reconcile(base, hand, v.hand.myDrawnTileId, pendingSlot);
     const inHand = new Set(hand);
     const prune = (ids: TileId[]) => ids.every((id) => inHand.has(id));
-    if (prev && v.hand.currentTurn !== prev.hand.currentTurn && v.hand.currentTurn === v.mySeat) play("turn");
-    if (prev && prev.version !== v.version && v.phase === "playing") play("tile");
+    if (prev) animateTransition(prev, v, { skipDrawFlight: pendingSlot !== null });
+    const consumed = pendingSlot !== null && arrived;
     set({
+      pendingSlot: consumed ? null : pendingSlot,
       view: v,
       slots,
       presence: v.presence,
@@ -158,6 +188,7 @@ export const useGame = create<GameStore>((set, get) => ({
     try {
       const r = await realtime.command({ commandId: newCommandId(), matchId: v.matchId, expectedVersion: v.version, action });
       if (!r.ok) {
+        set({ pendingSlot: null });
         play("error");
         toast.error(r.error);
         if (r.code === "STALE_VERSION" || r.code === "NETWORK") realtime.sync(v.matchId);
@@ -174,7 +205,7 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ busy: false });
     }
   },
-  reset: () => set({ view: null, slots: Array(RACK_SLOTS).fill(null), selected: [], stagedMelds: [], stagedPairs: [] }),
+  reset: () => set({ view: null, pendingSlot: null, slots: Array(RACK_SLOTS).fill(null), selected: [], stagedMelds: [], stagedPairs: [] }),
 }));
 
 export function orderBySlots(ids: TileId[], slots: Slots): TileId[] {

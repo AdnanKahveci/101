@@ -20,9 +20,9 @@ export async function publish(channel: string, msg: BusMessage) {
 const PRESENCE_TTL = 35_000;
 export const presenceKey = (userId: string) => `okey:presence:${userId}`;
 
-export async function touchPresence(userId: string) {
+export async function touchPresence(userId: string, ttl = PRESENCE_TTL) {
   const infra = await getInfra();
-  await infra.set(presenceKey(userId), String(Date.now()), PRESENCE_TTL);
+  await infra.set(presenceKey(userId), String(Date.now()), ttl);
 }
 
 export async function onlineMap(userIds: string[]): Promise<Record<string, boolean>> {

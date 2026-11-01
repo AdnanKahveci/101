@@ -31,6 +31,13 @@ body {
   min-height: 100%;
   -webkit-tap-highlight-color: transparent;
 }
+body {
+  background:
+    radial-gradient(ellipse 40% 35% at 15% 0%, rgba(255, 196, 110, 0.22), transparent 70%),
+    radial-gradient(ellipse 40% 35% at 85% 0%, rgba(255, 196, 110, 0.22), transparent 70%),
+    linear-gradient(180deg, #3d2714 0%, #24160b 55%, #160d06 100%);
+  background-attachment: fixed;
+}
 
 .felt {
   background:
@@ -65,4 +72,147 @@ body {
 }
 .turn-pulse {
   animation: pulse-ring 1.4s ease-out infinite;
+}
+
+/* ------------------------------------------------------------------ Kıraathane masası */
+
+/* Arka plan: sıcak lamba ışıkları, ahşap tavan, vitray şerit, lambri duvar */
+.kiraathane {
+  background:
+    radial-gradient(ellipse 22% 30% at 18% 6%, rgba(255, 196, 110, 0.45), transparent 70%),
+    radial-gradient(ellipse 22% 30% at 82% 6%, rgba(255, 196, 110, 0.45), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 220, 160, 0.18), transparent 70%),
+    linear-gradient(180deg, #2a1709 0, #2a1709 34px, transparent 34px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 90px),
+    linear-gradient(180deg, #6b4a2b 0%, #4a2f18 38%, #2e1b0d 70%, #1c1007 100%);
+}
+.vitray {
+  height: 10px;
+  background:
+    repeating-linear-gradient(90deg, #b8321f 0 18px, #2f6db5 18px 36px, #d8a020 36px 54px, #2f8a4f 54px 72px);
+  opacity: 0.55;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
+}
+
+/* Masa: ahşap kenarlı yeşil çuha, hafif perspektif (yalnızca dekoratif katmanda) */
+.table-shell {
+  position: absolute;
+  inset: 0;
+  transform: perspective(1100px) rotateX(9deg);
+  transform-origin: 50% 100%;
+  border-radius: 48px 48px 12px 12px;
+  padding: 14px;
+  background:
+    repeating-linear-gradient(100deg, rgba(0, 0, 0, 0.08) 0 3px, transparent 3px 13px),
+    linear-gradient(180deg, #9a6233, #6b3f1d 55%, #4b2a12);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    inset 0 2px 0 rgba(255, 220, 170, 0.35),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 640px) {
+  .table-shell {
+    transform: perspective(1100px) rotateX(4deg);
+    border-radius: 28px 28px 10px 10px;
+    padding: 9px;
+  }
+  .table-felt {
+    border-radius: 20px 20px 6px 6px !important;
+  }
+}
+.table-felt {
+  height: 100%;
+  border-radius: 36px 36px 6px 6px;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(255, 255, 255, 0.07), transparent 70%),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.035) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, #1d5a3c, #164a31 60%, #123d29);
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.35),
+    inset 0 10px 30px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+.table-felt::after {
+  content: "";
+  position: absolute;
+  inset: 5%;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Rakip ıstakası (oluklu ahşap ray) */
+.rail-wood {
+  background: linear-gradient(180deg, #8a5529, #5a3519);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 220, 170, 0.25),
+    0 4px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Benim ıstakam: iki katlı ahşap stand, altın şerit */
+.rack-stand {
+  background:
+    repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.07) 0 2px, transparent 2px 9px, rgba(255, 255, 255, 0.03) 9px 10px, transparent 10px 17px),
+    linear-gradient(180deg, #a86a37 0%, #87502a 45%, #6a3d1f 100%);
+  border-top: 2px solid #d6a84a;
+  box-shadow:
+    0 -10px 28px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 230, 180, 0.4),
+    inset 6px 0 0 #5a3218,
+    inset -6px 0 0 #5a3218,
+    inset 8px 0 0 #c99a45,
+    inset -8px 0 0 #c99a45;
+}
+.rack-shelf {
+  position: relative;
+}
+.rack-shelf::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #c3874c, #7c4823);
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 230, 180, 0.5);
+  pointer-events: none;
+}
+
+/* Taş arkası */
+.tile-back {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(140, 110, 60, 0.28) 0 18%, transparent 19%),
+    linear-gradient(180deg, #fbf3dc 0%, #ece0bf 70%, #d6c69c 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 -2px 0 rgba(0, 0, 0, 0.14) inset,
+    0 2px 3px rgba(0, 0, 0, 0.35);
+}
+
+.tile-face {
+  border-bottom: 2px solid #d8cba5;
+}
+
+@keyframes glow-amber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(252, 211, 77, 0.0), 0 2px 3px rgba(0,0,0,.35); }
+  50% { box-shadow: 0 0 14px 3px rgba(252, 211, 77, 0.75), 0 2px 3px rgba(0,0,0,.35); }
+}
+.draw-glow,
+.take-glow {
+  animation: glow-amber 1.3s ease-in-out infinite;
+}
+.fresh-glow {
+  box-shadow: 0 0 0 2px #fcd34d, 0 0 12px 2px rgba(252, 211, 77, 0.6);
+}
+.taken-glow {
+  box-shadow: 0 0 0 2px #f59e0b, 0 0 14px 3px rgba(245, 158, 11, 0.7);
+}
+[data-slot].slot-hover {
+  background: rgba(242, 193, 78, 0.35) !important;
+  box-shadow: inset 0 0 0 2px rgba(242, 193, 78, 0.9);
 }

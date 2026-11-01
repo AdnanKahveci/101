@@ -86,7 +86,7 @@ export const ctx = { now: 2000, seed: "ctx-seed" };
 
 export function countAllTiles(s: GameState): string[] {
   const h = s.hand;
-  const ids: string[] = [h.indicator.id, ...h.drawPile.map((t) => t.id)];
+  const ids: string[] = [...(h.indicatorTaken ? [] : [h.indicator.id]), ...h.drawPile.map((t) => t.id)];
   for (const seat of [0, 1, 2, 3] as Seat[]) {
     ids.push(...h.hands[seat].map((t) => t.id), ...h.discards[seat].map((t) => t.id));
   }

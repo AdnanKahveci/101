@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   allowThirteenOne: false,
   allowJokerPair: true,
   pairOpenerCanAddToMelds: true,
-  teamOpeningPolicy: "table",
+  teamOpeningPolicy: "independent",
   jokerReplacePolicy: "openedOnly",
   jokerFinishMultiplier: 2,
   pairFinishMultiplier: 2,
@@ -113,9 +113,9 @@ export function RoomSettingsForm({
           <div>
             <Label htmlFor="teamopen">Eşin açılış politikası</Label>
             <Select id="teamopen" disabled={disabled} value={value.teamOpeningPolicy} onChange={(e) => set("teamOpeningPolicy", e.target.value as RoomSettings["teamOpeningPolicy"])}>
+              <option value="independent">Yalnızca rakip açılışları barajı yükseltir (eşin 101 yeter)</option>
               <option value="table">Masa barajı herkese geçerli</option>
               <option value="partnerBase">Eşi açan, temel 101 / 5 çiftle açar</option>
-              <option value="independent">Yalnızca rakip açılışları barajı yükseltir</option>
             </Select>
           </div>
         )}

@@ -4,6 +4,8 @@ import type { Face, Tile as TileT, TileId } from "@/engine";
 import { cn } from "@/lib/utils";
 import { RACK_COLS, RACK_SLOTS, useGame } from "./store";
 import { Tile } from "./tile";
+import { useFx } from "./fx";
+import { play } from "@/lib/sound";
 
 export interface DropTarget {
   kind: "slot" | "discard" | "meld";
@@ -27,11 +29,12 @@ export function Rack({
 }: {
   tiles: TileT[];
   okey: Face;
-  highlights: Record<TileId, "joker" | "meld" | "pair" | null>;
+  highlights: Record<TileId, "joker" | "meld" | "pair" | "fresh" | "taken" | null>;
   showJokerMark: boolean;
   onDropOutside: (tileId: TileId, target: DropTarget) => void;
 }) {
   const { slots, selected, toggleSelect, moveTile } = useGame();
+  const hidden = useFx((s) => s.hidden);
   const byId = new Map(tiles.map((t) => [t.id, t]));
   const [drag, setDrag] = useState<{ id: TileId; x: number; y: number; hover: number | null } | null>(null);
   const start = useRef<{ id: TileId; x: number; y: number; moved: boolean; pointerId: number } | null>(null);
@@ -72,12 +75,16 @@ export function Rack({
     setDrag(null);
     if (!s || s.pointerId !== e.pointerId) return;
     if (!s.moved) {
+      play("select");
       toggleSelect(s.id);
       return;
     }
     const t = targetAt(e.clientX, e.clientY);
     if (!t) return;
-    if (t.kind === "slot") moveTile(s.id, t.slot!);
+    if (t.kind === "slot") {
+      play("tile");
+      moveTile(s.id, t.slot!);
+    }
     else onDropOutside(s.id, t);
   };
 
@@ -85,11 +92,11 @@ export function Rack({
 
   return (
     <div
-      className="wood no-select relative mx-auto w-full max-w-[1100px] rounded-t-2xl px-1.5 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 shadow-[0_-6px_20px_rgba(0,0,0,0.45)] [--tile-font:clamp(14px,3.6vw,26px)] [--tile-h:calc(var(--tile-w)*1.38)] [--tile-w:min(calc((100vw-28px)/15),56px)]"
+      className="rack-stand no-select relative mx-auto w-full max-w-[1100px] rounded-t-2xl px-2 pb-[max(env(safe-area-inset-bottom),6px)] pt-2 sm:px-4 [--tile-font:clamp(14px,3.6vw,26px)] [--tile-h:calc(var(--tile-w)*1.38)] [--tile-w:min(calc((100vw-40px)/15),56px)]"
       aria-label="Istaka"
     >
       {[0, 1].map((row) => (
-        <div key={row} className="flex justify-center gap-[2px] border-b-4 border-wood-900/60 py-1 last:border-b-0">
+        <div key={row} className="rack-shelf flex justify-center gap-[2px] pb-[7px] pt-1">
           {Array.from({ length: RACK_COLS }, (_, c) => {
             const idx = row * RACK_COLS + c;
             const id = slots[idx];
@@ -101,7 +108,7 @@ export function Rack({
                 className={cn(
                   "flex h-[var(--tile-h)] w-[var(--tile-w)] items-end justify-center rounded-md",
                   drag?.hover === idx && "bg-gold/30",
-                  !tile && "bg-black/10",
+                  !tile && "bg-black/[0.07]",
                 )}
               >
                 {tile && (
@@ -112,6 +119,7 @@ export function Rack({
                     selected={selected.includes(tile.id)}
                     highlight={highlights[tile.id] ?? null}
                     showJokerMark={showJokerMark}
+                    hidden={hidden.includes(tile.id)}
                     className={cn(drag?.id === tile.id && "opacity-30")}
                     onPointerDown={(e: React.PointerEvent) => onPointerDown(e, tile.id)}
                     onPointerMove={onPointerMove}

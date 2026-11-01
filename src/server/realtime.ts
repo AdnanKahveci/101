@@ -12,6 +12,7 @@ import { getInfra, type Unsubscribe } from "./infra";
 import { matchChannel, onlineMap, publish, roomChannel, touchPresence, userChannel, type BusMessage } from "./channels";
 import { AppError } from "./errors";
 import { checkTimeout, loadState, processCommand, viewFor } from "./game-service";
+import { runBots } from "./bots";
 import { getRoom } from "./rooms";
 import { commandSchema } from "./validation";
 
@@ -189,6 +190,7 @@ class Connection {
     if (this.watchedMatch) {
       const matchId = this.watchedMatch;
       await checkTimeout(matchId).catch((e) => console.error("[timeout]", e));
+      void runBots(matchId).catch((e) => console.error("[bots]", e));
       const state = await loadState(matchId);
       const online = await onlineMap(state.players.map((p) => p.userId));
       presence = Object.fromEntries(state.players.map((p) => [p.seat, online[p.userId] ?? false]));
@@ -252,6 +254,7 @@ class Connection {
       const r = await processCommand(this.user, cmd);
       this.send({ t: "ack", commandId: cmd.commandId, version: r.version, duplicate: r.duplicate });
       await this.pushState(cmd.matchId, false);
+      void runBots(cmd.matchId).catch((e) => console.error("[bots]", e));
     } catch (e) {
       const err = e instanceof AppError ? e : new AppError("INTERNAL", "Sunucu hatası.");
       if (!(e instanceof AppError)) console.error("[command]", e);

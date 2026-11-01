@@ -47,7 +47,7 @@ export function GuestForm({ next }: { next?: string | null }) {
         try {
           await api("/api/auth/guest", { body: { nickname, avatar } });
           await refresh();
-          router.push(next || "/dashboard");
+          router.push(next || "/");
         } catch (err) {
           toast.error((err as Error).message);
         } finally {

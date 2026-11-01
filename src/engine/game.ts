@@ -1,5 +1,5 @@
 import { createRng, shuffle, type Rng } from "./rng";
-import { createTileSet, isJoker, okeyFromIndicator, describeTile, tileById } from "./tiles";
+import { createTileSet, isJoker, okeyFromIndicator, describeTile, tileById, tileFaceValue } from "./tiles";
 import {
   addTileToMeld,
   calculateOpeningPoints,
@@ -175,9 +175,36 @@ function ensureLeavesTile(hand: Tile[], usedIds: TileId[]): string | null {
   return hand.length - usedIds.length < 1 ? "Elinizde atmak için en az bir taş kalmalı." : null;
 }
 
-/** Taşın elden kullanılabileceği durum kontrolü: alınan yan taş bu hamlede kullanıldı mı? */
-function obligationSatisfied(h: HandState, usedIds: TileId[]): boolean {
-  return !!h.takeObligation && usedIds.includes(h.takeObligation.tileId);
+/** Elde bekleyen (henüz çiftte kullanılmamış) gösterge taşının kimliği. */
+function pendingIndicator(h: HandState, seat: Seat): TileId | null {
+  return h.indicatorTaken && h.indicatorTaken.seat === seat && !h.indicatorTaken.inPair ? h.indicator.id : null;
+}
+
+/** Göstergenin eşi (aynı renk ve sayı, göstergenin kendisi değil) elde mi? */
+function holdsIndicatorTwin(h: HandState, seat: Seat): boolean {
+  const ind = h.indicator;
+  return h.hands[seat].some((t) => !t.isFakeJoker && t.id !== ind.id && t.color === ind.color && t.value === ind.value);
+}
+
+/**
+ * Yandan alınan taş kullanıldı: zorunluluk kalkar ve taşı ATAN oyuncuya ceza yazılır
+ * (seri açma / işleme: taş değeri ×10, çift açma: ×20).
+ */
+function settleTakenTile(h: HandState, rules: RuleProfile, usedIds: TileId[], kind: "meld" | "pair") {
+  const ob = h.takeObligation;
+  if (!ob || !usedIds.includes(ob.tileId)) return;
+  h.takeObligation = null;
+  if (!rules.penaltiesEnabled) return;
+  const mult = kind === "pair" ? (rules.takenTilePairMultiplier ?? 20) : (rules.takenTileMeldMultiplier ?? 10);
+  if (mult <= 0) return;
+  const tile = tileById(ob.tileId);
+  const value = tileFaceValue(tile, h.okey);
+  h.penalties.push({
+    seat: ob.fromSeat,
+    amount: value * mult,
+    reason: `Attığı taş yandan alınıp ${kind === "pair" ? "çift açıldı" : "kullanıldı"} (${describeTile(tile)} ×${mult})`,
+    turnNumber: h.turnNumber,
+  });
 }
 
 // ---------------------------------------------------------------- Doğrulama
@@ -230,6 +257,18 @@ export function applyAction(
       events.push({ type: "DISCARD_TAKEN", seat, data: { tile, from } });
       break;
     }
+    case "TAKE_INDICATOR": {
+      h.hands[seat].push({ ...h.indicator });
+      h.indicatorTaken = { seat, inPair: false };
+      events.push({ type: "INDICATOR_TAKEN", seat, data: { tile: h.indicator } });
+      break;
+    }
+    case "RETURN_INDICATOR": {
+      h.hands[seat] = removeFromHand(hand(), [h.indicator.id]);
+      h.indicatorTaken = null;
+      events.push({ type: "INDICATOR_RETURNED", seat, data: {} });
+      break;
+    }
     case "RETURN_DISCARD": {
       const ob = h.takeObligation!;
       const tile = hand().find((t) => t.id === ob.tileId)!;
@@ -259,7 +298,7 @@ export function applyAction(
         h.opened[seat] = { kind: "melds", value: r.value.total, turnNumber: h.turnNumber };
         h.highestRunOpening.push({ seat, value: r.value.total });
       }
-      if (obligationSatisfied(h, used)) h.takeObligation = null;
+      settleTakenTile(h, rules, used, "meld");
       events.push({
         type: wasOpened ? "MELDS_LAID" : "HAND_OPENED",
         seat,
@@ -281,7 +320,8 @@ export function applyAction(
         h.opened[seat] = { kind: "pairs", value: r.value.length, turnNumber: h.turnNumber };
         h.highestPairOpening.push({ seat, value: r.value.length });
       }
-      if (obligationSatisfied(h, used)) h.takeObligation = null;
+      settleTakenTile(h, rules, used, "pair");
+      if (h.indicatorTaken && used.includes(h.indicator.id)) h.indicatorTaken = { seat, inPair: true };
       events.push({
         type: wasOpened ? "PAIRS_LAID" : "HAND_OPENED",
         seat,
@@ -296,7 +336,7 @@ export function applyAction(
       if (!r.ok) return r;
       meld.cells = r.value;
       h.hands[seat] = removeFromHand(hand(), [tile.id]);
-      if (obligationSatisfied(h, [tile.id])) h.takeObligation = null;
+      settleTakenTile(h, rules, [tile.id], "meld");
       events.push({ type: "TILE_ADDED", seat, data: { meldId: meld.id, tile, cells: meld.cells } });
       break;
     }
@@ -335,7 +375,13 @@ export function applyAction(
         h.melds.push({ id: `m${h.nextMeldSeq++}`, kind: mr.value.kind, owner: seat, cells: mr.value.cells });
       }
       h.hands[seat] = newHand;
-      if (obligationSatisfied(h, used)) h.takeObligation = null;
+      settleTakenTile(h, rules, used, "meld");
+      // Rakibin perindeki okey alındı: per sahibine ceza (eşli oyunda eşin perinden alınırsa ceza yok).
+      const isOpponent = meld.owner !== seat && (!rules.teamMode || teamOf(meld.owner) !== teamOf(seat));
+      const jokerPenalty = rules.jokerTakenPenalty ?? 101;
+      if (rules.penaltiesEnabled && isOpponent && jokerPenalty > 0) {
+        h.penalties.push({ seat: meld.owner, amount: jokerPenalty, reason: `Perindeki okey alındı (${describeTile(tile)} ile)`, turnNumber: h.turnNumber });
+      }
       events.push({ type: "JOKER_REPLACED", seat, data: { meldId: meld.id, tile } });
       break;
     }
@@ -347,7 +393,11 @@ export function applyAction(
       if (rules.penaltiesEnabled && !finishing) {
         if (jokerDiscard && rules.discardJokerPenalty > 0) {
           h.penalties.push({ seat, amount: rules.discardJokerPenalty, reason: "Okey atıldı", turnNumber: h.turnNumber });
-        } else if (!jokerDiscard && rules.discardPlayablePenalty > 0 && isPlayableOnTable(tile, h.melds, h.okey, rules)) {
+        } else if (
+          !jokerDiscard &&
+          rules.discardPlayablePenalty > 0 &&
+          (isPlayableOnTable(tile, h.melds, h.okey, rules) || h.melds.some((m) => replaceJokerInMeld(m, tile, h.okey).ok))
+        ) {
           h.penalties.push({ seat, amount: rules.discardPlayablePenalty, reason: `İşlek taş atıldı (${describeTile(tile)})`, turnNumber: h.turnNumber });
         }
       }
@@ -470,6 +520,10 @@ function applyTimeout(input: GameState, seat: Seat, ctx: ApplyContext): Result<A
     const r = step({ type: "RETURN_DISCARD" });
     if (!r.ok) return r;
   }
+  if (pendingIndicator(state.hand, seat)) {
+    const r = step({ type: "RETURN_INDICATOR" });
+    if (!r.ok) return r;
+  }
   if (state.hand.turnPhase === "awaitingDraw") {
     const r = step({ type: "DRAW_TILE" });
     if (!r.ok) return r;
@@ -523,9 +577,22 @@ export function validateAction(state: GameState, action: GameAction, seat: Seat,
     case "RETURN_DISCARD":
       if (!h.takeObligation) return err("Geri bırakılacak yandan alınmış taş yok.");
       return { ok: true, value: true };
+    case "TAKE_INDICATOR": {
+      if (h.turnPhase !== "awaitingAction") return err("Önce taş çekmelisiniz.");
+      if (!r.allowPairOpening) return err("Bu masada çift açılış kapalı.");
+      if (h.opened[seat]) return err("Gösterge yalnızca ilk açılışta çift için alınabilir.");
+      if (h.indicatorTaken) return err("Gösterge zaten alındı.");
+      if (h.takeObligation) return err("Önce yandan aldığınız taşı kullanın veya geri bırakın.");
+      if (!holdsIndicatorTwin(h, seat)) return err("Göstergeyi almak için elinizde göstergenin eşi olmalı.");
+      return { ok: true, value: true };
+    }
+    case "RETURN_INDICATOR":
+      if (!pendingIndicator(h, seat)) return err("Elinizde geri bırakılacak gösterge yok.");
+      return { ok: true, value: true };
     case "OPEN_MELDS": {
       if (h.turnPhase !== "awaitingAction") return err("Önce taş çekmelisiniz.");
       if (!r.allowRunOpening) return err("Bu masada seri açılış kapalı.");
+      if (pendingIndicator(h, seat)) return err("Aldığınız göstergeyle önce çift açın veya göstergeyi geri bırakın.");
       if (action.melds.length === 0) return err("En az bir per seçmelisiniz.");
       const ids = action.melds.flatMap((m) => m.tileIds);
       if (ids.some((id) => !has(id))) return err("Elinizde olmayan bir taş seçildi.");
@@ -553,9 +620,12 @@ export function validateAction(state: GameState, action: GameAction, seat: Seat,
       const leave = ensureLeavesTile(myHand, ids);
       if (leave) return err(leave);
       const opened = h.opened[seat];
-      if (opened?.kind === "melds" && !r.meldOpenerCanOpenPairs) return err("Seri açan oyuncu bu masada çift açamaz.");
+      if (opened?.kind === "melds" && !r.meldOpenerCanOpenPairs && h.pairs.length === 0)
+        return err("Seri açan oyuncu, masada çift açan olmadan çift işleyemez.");
       const pv = validatePairs(action.pairs, tilesMap(myHand), h.okey, r);
       if (!pv.ok) return pv;
+      const ind = pendingIndicator(h, seat);
+      if (ind && !ids.includes(ind)) return err("Aldığınız gösterge açtığınız çiftlerin içinde olmalı.");
       if (!opened) {
         const need = requiredPairCount(state, seat);
         if (action.pairs.length < need) return err(`Çift açılış için en az ${need} çift gerekiyor (seçilen: ${action.pairs.length}).`);
@@ -567,6 +637,7 @@ export function validateAction(state: GameState, action: GameAction, seat: Seat,
     }
     case "ADD_TO_MELD": {
       if (h.turnPhase !== "awaitingAction") return err("Önce taş çekmelisiniz.");
+      if (pendingIndicator(h, seat)) return err("Aldığınız göstergeyle önce çift açın veya göstergeyi geri bırakın.");
       const block = canAddToMelds(state, seat);
       if (block) return err(block);
       if (!has(action.tileId)) return err("Elinizde olmayan bir taş seçildi.");
@@ -581,6 +652,7 @@ export function validateAction(state: GameState, action: GameAction, seat: Seat,
     }
     case "REPLACE_JOKER": {
       if (h.turnPhase !== "awaitingAction") return err("Önce taş çekmelisiniz.");
+      if (pendingIndicator(h, seat)) return err("Aldığınız göstergeyle önce çift açın veya göstergeyi geri bırakın.");
       if (r.jokerReplacePolicy === "disabled") return err("Bu masada okey değiştirme kapalı.");
       const block = canAddToMelds(state, seat);
       if (block) return err(block);
@@ -597,6 +669,7 @@ export function validateAction(state: GameState, action: GameAction, seat: Seat,
     case "FINISH_HAND": {
       if (h.turnPhase !== "awaitingAction") return err("Taş atmadan önce taş çekmelisiniz.");
       if (!has(action.tileId)) return err("Elinizde olmayan bir taş seçildi.");
+      if (pendingIndicator(h, seat)) return err("Göstergeyi eşiyle çift olarak açın veya geri bırakın.");
       if (h.takeObligation) {
         return err(
           h.takeObligation.wasOpened
@@ -626,8 +699,15 @@ export function getLegalActions(state: GameState, seat: Seat): GameAction["type"
   }
   const opened = h.opened[seat];
   if (h.takeObligation) out.push("RETURN_DISCARD");
+  const indPending = !!pendingIndicator(h, seat);
+  if (indPending) {
+    out.push("RETURN_INDICATOR", "OPEN_PAIRS");
+    return out;
+  }
+  if (!opened && r.allowPairOpening && !h.indicatorTaken && !h.takeObligation && holdsIndicatorTwin(h, seat)) out.push("TAKE_INDICATOR");
   if (r.allowRunOpening && (!opened || opened.kind === "melds" || r.pairOpenerCanOpenMelds)) out.push("OPEN_MELDS");
-  if (r.allowPairOpening && (!opened || opened.kind === "pairs" || r.meldOpenerCanOpenPairs)) out.push("OPEN_PAIRS");
+  // Seri açan oyuncu, masada biri çift açtıysa elindeki çiftleri de işleyebilir.
+  if (r.allowPairOpening && (!opened || opened.kind === "pairs" || r.meldOpenerCanOpenPairs || h.pairs.length > 0)) out.push("OPEN_PAIRS");
   if (opened && (opened.kind === "melds" || r.pairOpenerCanAddToMelds) && h.melds.length > 0) {
     out.push("ADD_TO_MELD");
     if (r.jokerReplacePolicy !== "disabled" && h.melds.some((m) => m.cells.some((c) => c.isJoker))) out.push("REPLACE_JOKER");

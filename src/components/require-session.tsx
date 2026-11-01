@@ -11,7 +11,7 @@ export function RequireSession({ children }: { children: (me: Me) => React.React
   const path = usePathname();
   useEffect(() => {
     if (!loaded) void refresh();
-    else if (!me) router.replace(`/login?next=${encodeURIComponent(path ?? "/dashboard")}`);
+    else if (!me) router.replace(`/?next=${encodeURIComponent(path ?? "/")}`);
   }, [loaded, me, refresh, router, path]);
   if (!loaded || !me) return <PageLoading />;
   return <>{children(me)}</>;

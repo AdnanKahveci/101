@@ -11,21 +11,29 @@ const COLOR_CLASS: Record<string, string> = {
   black: "text-tile-black",
 };
 
-export type TileSize = "xs" | "sm" | "md" | "rack";
+export type TileSize = "xs" | "sm" | "md" | "rack" | "fill";
 
 const SIZE: Record<TileSize, string> = {
   xs: "w-6 h-8 text-sm rounded",
   sm: "w-8 h-11 text-lg rounded-md",
   md: "w-10 h-14 text-2xl rounded-md",
   rack: "w-[var(--tile-w)] h-[var(--tile-h)] text-[length:var(--tile-font)] rounded-md",
+  fill: "w-full h-full rounded-md",
 };
+
+/** Taşın arka yüzü (deste, rakip ıstakaları, uçan ters taşlar). */
+export function TileBack({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={cn("tile-back rounded-md", className)} style={style} aria-hidden />;
+}
 
 export interface TileProps {
   tile: TileT;
   okey?: Face;
   size?: TileSize;
   selected?: boolean;
-  highlight?: "joker" | "meld" | "pair" | "target" | null;
+  highlight?: "joker" | "meld" | "pair" | "target" | "fresh" | "taken" | null;
+  /** Animasyon sırasında gizle (yerini korur) */
+  hidden?: boolean;
   showJokerMark?: boolean;
   /** Okey olarak bir değeri temsil ediyorsa (perde) */
   represents?: { color: string; value: number } | null;
@@ -36,7 +44,7 @@ export interface TileProps {
 }
 
 export const Tile = forwardRef<HTMLDivElement, TileProps & React.HTMLAttributes<HTMLDivElement>>(function Tile(
-  { tile, okey, size = "md", selected, highlight, showJokerMark, represents, layout = true, onClick, className, faceDown, ...rest },
+  { tile, okey, size = "md", selected, highlight, showJokerMark, represents, layout = true, onClick, className, faceDown, hidden, ...rest },
   ref,
 ) {
   const joker = okey ? isJoker(tile, okey) : false;
@@ -54,13 +62,16 @@ export const Tile = forwardRef<HTMLDivElement, TileProps & React.HTMLAttributes<
       onClick={onClick}
       className={cn(
         "relative flex shrink-0 select-none flex-col items-center justify-start pt-[6%] font-black leading-none",
-        faceDown ? "bg-gradient-to-b from-cream-dark to-[#d8c9a0] shadow" : "tile-face",
+        faceDown ? "tile-back" : "tile-face",
         SIZE[size],
         selected && "-translate-y-2 ring-2 ring-gold",
         highlight === "meld" && "outline outline-2 outline-emerald-400/80",
         highlight === "pair" && "outline outline-2 outline-sky-400/80",
         highlight === "target" && "ring-2 ring-emerald-400",
         highlight === "joker" && "shadow-[0_0_10px_2px_rgba(242,193,78,0.8)]",
+        highlight === "fresh" && "fresh-glow",
+        highlight === "taken" && "taken-glow",
+        hidden && "opacity-0",
         onClick && "cursor-pointer",
         className,
       )}
@@ -81,6 +92,9 @@ export const Tile = forwardRef<HTMLDivElement, TileProps & React.HTMLAttributes<
         ))}
       {!faceDown && joker && showJokerMark && (
         <span className="absolute -right-1 -top-1 rounded-full bg-gold px-1 text-[9px] font-black text-felt-950">OK</span>
+      )}
+      {!faceDown && highlight === "taken" && (
+        <span className="absolute -left-1 -top-1 rounded-full bg-amber-400 px-1 text-[8px] font-black text-felt-950">YAN</span>
       )}
       {represents && (
         <span className={cn("absolute bottom-0.5 text-[9px] font-black", COLOR_CLASS[represents.color])}>={represents.value === 14 ? 1 : represents.value}</span>

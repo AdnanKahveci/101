@@ -107,6 +107,17 @@ export interface RuleProfile {
   discardJokerPenalty: number; // 101
   discardPlayablePenalty: number; // 101 (işlek taş)
   failedTakePenalty: number; // 101 (yandan alıp kullanamama)
+  /** Yandan alınan taşla seri açılır/işlenirse taşı ATAN oyuncuya taş değeri × bu çarpan ceza (10) */
+  takenTileMeldMultiplier?: number;
+  /** Rakibin perindeki okey gerçek taşla alınırsa per sahibine ceza (101) */
+  jokerTakenPenalty?: number;
+  /**
+   * Kafadan bitiş: kimse açmamışken bir oyuncu ilk açışında (tek turda açıp) biterse
+   * bitirene ve eşine puan yazılmaz, rakiplerin her birine bu ceza yazılır (404).
+   */
+  headFinishPenalty?: number;
+  /** Yandan alınan taşla çift açılırsa taşı ATAN oyuncuya taş değeri × bu çarpan ceza (20) */
+  takenTilePairMultiplier?: number;
   silerEnabled: boolean;
   deckExhaustedScoring: DeckExhaustedScoring;
   // Maç
@@ -176,6 +187,11 @@ export interface HandState {
   /** Bu turda çekilen taş. */
   drawnTileId: TileId | null;
   takeObligation: TakeObligation | null;
+  /**
+   * Göstergeyle çift: göstergenin eşini elinde tutan oyuncu ilk açılışında masadaki göstergeyi alıp
+   * eşiyle çift yapabilir. inPair=false iken taş elde, aynı hamlede çiftte kullanılmalı veya geri bırakılmalı.
+   */
+  indicatorTaken?: { seat: Seat; inPair: boolean } | null;
   /** Oyuncunun bu turun başında açık olup olmadığı (elden bitiş için). */
   openedAtTurnStart: boolean;
   penalties: PenaltyRecord[];
@@ -250,6 +266,8 @@ export type GameAction =
   | { type: "DRAW_TILE" }
   | { type: "TAKE_DISCARD" }
   | { type: "RETURN_DISCARD" }
+  | { type: "TAKE_INDICATOR" }
+  | { type: "RETURN_INDICATOR" }
   | { type: "OPEN_MELDS"; melds: MeldSpec[] }
   | { type: "OPEN_PAIRS"; pairs: [TileId, TileId][] }
   | { type: "ADD_TO_MELD"; meldId: string; tileId: TileId; side?: "start" | "end" }
