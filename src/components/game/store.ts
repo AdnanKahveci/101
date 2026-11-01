@@ -8,7 +8,8 @@ import { toast } from "@/lib/toast";
 import { play } from "@/lib/sound";
 import { animateTransition } from "./fx";
 
-export const RACK_COLS = 15;
+/** Istaka sütun sayısı: geniş ekranda ıstaka boydan boya 20 yuva, dar ekranda (telefon dikey) 15. Oturum boyunca sabit. */
+export const RACK_COLS = typeof window !== "undefined" && window.innerWidth < 640 ? 15 : 20;
 export const RACK_SLOTS = RACK_COLS * 2;
 
 type Slots = (TileId | null)[];
@@ -20,6 +21,9 @@ interface GameStore {
   stagedMelds: MeldSpec[];
   stagedPairs: [TileId, TileId][];
   busy: boolean;
+  /** Ters çevrilmiş (kapalı) taşlar – ör. okeyi gizlemek için basılı tutup çevirme */
+  flipped: TileId[];
+  toggleFlip: (id: TileId) => void;
   presence: Record<number, boolean>;
   /** Oyuncu çektiği/aldığı taşı sürükleyip belirli bir yuvaya bıraktıysa o yuva */
   pendingSlot: number | null;
@@ -58,6 +62,62 @@ function saveSlots(v: ClientGameView | null, slots: Slots) {
   try {
     localStorage.setItem(storageKey(v), JSON.stringify(slots));
   } catch {}
+}
+
+function loadFlipped(v: ClientGameView): TileId[] {
+  try {
+    const arr = JSON.parse(localStorage.getItem(`${storageKey(v)}:flip`) ?? "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveFlipped(v: ClientGameView | null, ids: TileId[]) {
+  if (!v) return;
+  try {
+    localStorage.setItem(`${storageKey(v)}:flip`, JSON.stringify(ids));
+  } catch {}
+}
+
+/** Dolu yuvaya bırakılan taşı araya sokar: aynı sıradaki taşlar boşluğa doğru bir kayar (yer değiştirme yok). */
+export function insertAt(prev: Slots, id: TileId, toSlot: number, cols = RACK_COLS): Slots {
+  const slots = prev.slice();
+  const from = slots.indexOf(id);
+  if (from < 0 || toSlot < 0 || toSlot >= slots.length || from === toSlot) return prev;
+  if (!slots[toSlot]) {
+    slots[from] = null;
+    slots[toSlot] = id;
+    return slots;
+  }
+  slots[from] = null;
+  const rowStart = Math.floor(toSlot / cols) * cols;
+  const rowEnd = rowStart + cols - 1;
+  const gapRight = () => {
+    for (let i = toSlot + 1; i <= rowEnd; i++) if (!slots[i]) return i;
+    return -1;
+  };
+  const gapLeft = () => {
+    for (let i = toSlot - 1; i >= rowStart; i--) if (!slots[i]) return i;
+    return -1;
+  };
+  // Aynı sırada soldan sağa sürüklenince taş hedefin sağına geçer (boşalan yer sola doğru kapanır)
+  const preferLeft = from >= rowStart && from < toSlot;
+  let gap = preferLeft ? gapLeft() : gapRight();
+  let dir: "left" | "right" = preferLeft ? "left" : "right";
+  if (gap < 0) {
+    gap = preferLeft ? gapRight() : gapLeft();
+    dir = preferLeft ? "right" : "left";
+  }
+  if (gap < 0) {
+    // Sıra tamamen dolu: yer değiştir
+    slots[from] = slots[toSlot];
+    slots[toSlot] = id;
+    return slots;
+  }
+  if (dir === "right") for (let i = gap; i > toSlot; i--) slots[i] = slots[i - 1];
+  else for (let i = gap; i < toSlot; i++) slots[i] = slots[i + 1];
+  slots[toSlot] = id;
+  return slots;
 }
 
 /** Oyuncunun özel ıstaka dizilimini korur: gelen taşlar boş yuvalara, giden taşlar kaldırılır. */
@@ -107,6 +167,13 @@ export const useGame = create<GameStore>((set, get) => ({
   stagedMelds: [],
   stagedPairs: [],
   busy: false,
+  flipped: [],
+  toggleFlip: (id) => {
+    const f = get().flipped;
+    const next = f.includes(id) ? f.filter((x) => x !== id) : [...f, id];
+    set({ flipped: next });
+    saveFlipped(get().view, next);
+  },
   presence: {},
   pendingSlot: null,
   setPendingSlot: (slot) => set({ pendingSlot: slot }),
@@ -130,6 +197,7 @@ export const useGame = create<GameStore>((set, get) => ({
       view: v,
       slots,
       presence: v.presence,
+      flipped: (newHand ? loadFlipped(v) : get().flipped).filter((id) => inHand.has(id)),
       selected: get().selected.filter((id) => inHand.has(id)),
       stagedMelds: newHand ? [] : get().stagedMelds.filter((m) => prune(m.tileIds)),
       stagedPairs: newHand ? [] : get().stagedPairs.filter((p) => prune(p)),
@@ -143,12 +211,8 @@ export const useGame = create<GameStore>((set, get) => ({
   },
   clearSelection: () => set({ selected: [] }),
   moveTile: (id, toSlot) => {
-    const slots = get().slots.slice();
-    const from = slots.indexOf(id);
-    if (from < 0 || toSlot < 0 || toSlot >= RACK_SLOTS || from === toSlot) return;
-    const occupant = slots[toSlot];
-    slots[toSlot] = id;
-    slots[from] = occupant; // dolu yuvaya bırakılırsa yer değiştirir
+    const slots = insertAt(get().slots, id, toSlot);
+    if (slots === get().slots) return;
     set({ slots });
     saveSlots(get().view, slots);
   },
@@ -205,7 +269,7 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ busy: false });
     }
   },
-  reset: () => set({ view: null, pendingSlot: null, slots: Array(RACK_SLOTS).fill(null), selected: [], stagedMelds: [], stagedPairs: [] }),
+  reset: () => set({ view: null, pendingSlot: null, flipped: [], slots: Array(RACK_SLOTS).fill(null), selected: [], stagedMelds: [], stagedPairs: [] }),
 }));
 
 export function orderBySlots(ids: TileId[], slots: Slots): TileId[] {

@@ -205,6 +205,12 @@ export function GameClient({ matchId }: { matchId: string }) {
     return meldsFromRack(g.slots, RACK_COLS, view.myHand, okey, view.rules);
   }, [view, okey, g.slots]);
 
+  /** Istakada yan yana dizili çift sayısı */
+  const rackPairs = useMemo(() => {
+    if (!view || !okey) return 0;
+    return pairsFromRack(g.slots, RACK_COLS, view.myHand, okey, view.rules).length;
+  }, [view, okey, g.slots]);
+
   const openMelds = useCallback(async () => {
     if (!view || !okey) return;
     if (stagedMelds.length > 0) {
@@ -594,7 +600,23 @@ export function GameClient({ matchId }: { matchId: string }) {
 
         {/* Istaka */}
         {mySeat !== null ? (
-          <Rack tiles={view.myHand} okey={okey} highlights={highlights} showJokerMark={assisted} onDropOutside={onDropOutside} />
+          <Rack
+            tiles={view.myHand}
+            okey={okey}
+            highlights={highlights}
+            showJokerMark={assisted}
+            onDropOutside={onDropOutside}
+            badge={
+              view.phase === "playing" && (rackMelds?.total || rackPairs > 0) ? (
+                <div className="rack-total pointer-events-none absolute -top-3 left-3 z-10 flex gap-1 text-[11px] font-black sm:left-5 sm:text-xs" data-testid="rack-total">
+                  {rackMelds && rackMelds.total > 0 && (
+                    <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-white shadow">Seri: {rackMelds.total}</span>
+                  )}
+                  {rackPairs > 0 && <span className="rounded-full bg-sky-600 px-2 py-0.5 text-white shadow">Çift: {rackPairs}</span>}
+                </div>
+              ) : null
+            }
+          />
         ) : (
           <div className="rack-stand p-3 text-center text-sm text-white/80">Seyirci modundasınız. Oyuncuların taşları gizlidir.</div>
         )}
