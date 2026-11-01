@@ -7,7 +7,8 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 async function main() {
-  const url = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+  // Migrasyon için havuzsuz (PgBouncer dışı) doğrudan bağlantı tercih edilir.
+  const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.POSTGRES_URL_NON_POOLING ?? process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
   if (!url) {
     if (process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview") {
       console.error("HATA: DATABASE_URL tanımlı değil. Vercel proje ayarlarından yönetilen PostgreSQL bağlayın.");
