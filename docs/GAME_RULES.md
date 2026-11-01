@@ -31,8 +31,8 @@ Bu belge `src/engine` içindeki oyun motorunun **gerçekte uyguladığı** kural
 
 ### Seri
 - Aynı renkten **en az 3 ardışık** sayıdan oluşur. Örnekler: Kırmızı 5-6-7, Siyah 10-11-12-13.
-- 1 yalnızca serinin başında olabilir. Varsayılan profilde **12-13-1 geçersizdir** (`allowThirteenOne = false`).
-- Bu kural açıldığında 13'ten sonraki 1 geçerli olur ve **14 puan** sayılır (`aceAfterThirteenPoints`).
+- 1 yalnızca serinin başında olabilir. **12-13-1 (ve 11-12-13-1) her masada geçersizdir**; oda ayarıyla açılamaz, devam eden maçlara da uygulanır.
+- Okey de 13'ten sonra "1" yerine kullanılamaz (12-13-okey serisinde okey 11 sayılır).
 - **13-1-2 her profilde geçersizdir.**
 
 ### Grup

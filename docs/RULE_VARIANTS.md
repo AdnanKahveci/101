@@ -13,7 +13,7 @@ Kural profili `src/engine/types.ts` → `RuleProfile` içinde tanımlıdır, var
 | `penaltiesEnabled` | El içi cezalar (okey/işlek atma, yan taş) | `true` | `false` | Cezalı |
 | `allowRunOpening` | Seri ile açılış | `true` | `false` (en az biri açık olmalı) | Seri açma |
 | `allowPairOpening` | Çift ile açılış | `true` | `false` | Çift açma |
-| `allowThirteenOne` | 12-13-1 / 11-12-13-1 serileri; 13-1-2 her zaman geçersiz | `false` | `true` | 12-13-1 serisi |
+| `allowThirteenOne` | 12-13-1 / 11-12-13-1 serileri (motor değişkeni; **sitede her zaman kapalı**, oda ayarında yok) | `false` | — | — |
 | `aceAfterThirteenPoints` | 13'ten sonraki 1'in puanı | `14` | sayı | — |
 | `minOpeningPoints` | Seri açılış barajı | `101` | 1-300 | — |
 | `minOpeningPairs` | Çift açılış barajı | `5` | 1-10 | — |
@@ -52,7 +52,7 @@ Oda düzeyi ek ayar: `allowSpectators` (varsayılan `true`). Seyirciler hiçbir 
 
 ## Tartışmalı kuralların varsayılan seçimleri ve gerekçeleri
 
-- **12-13-1:** Bölgeden bölgeye değişir. Sessizce kabul etmemek için varsayılan olarak kapalıdır. Açıldığında 1, 14 puan sayılır. 13-1-2 hiçbir profilde geçerli değildir.
+- **12-13-1:** Bu sitede hiçbir masada geçerli değildir (oda ayarıyla açılamaz, devam eden maçlara da uygulanır). 13-1-2 de geçersizdir.
 - **Okeyin konumu:** Okeyin yorumu belirsizse açılış puanı lehine en yüksek yorum seçilir. Oyuncu `jokerFaces` ile farklı bir yorum isteyebilir. Masaya konduktan sonra okeyin konumu sabittir.
 - **Yandan alma:** Alınan taş aynı turda kullanılmalıdır. Kullanılamazsa taş geri bırakılır ve +101 ceza yazılır (hatalı açma cezasının karşılığı).
 - **Siler:** Platforma özgü tanım kullanılmıştır: elden biten oyuncu veya takım biriken pozitif toplamını sıfırlar. Bu yüzden varsayılan olarak kapalıdır.

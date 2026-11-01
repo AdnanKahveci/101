@@ -85,13 +85,19 @@ export async function loadState(matchId: string, opts: { fresh?: boolean } = {})
   const infra = await getInfra();
   if (!opts.fresh) {
     const cached = await infra.get(stateKey(matchId));
-    if (cached) return JSON.parse(cached) as GameState;
+    if (cached) return withHouseRules(JSON.parse(cached) as GameState);
   }
   const db = await getDb();
   const [row] = await db.select().from(schema.gameSnapshots).where(eq(schema.gameSnapshots.matchId, matchId)).limit(1);
   if (!row) fail("NOT_FOUND", "Maç bulunamadı.");
   const state = row!.state as GameState;
   await infra.set(stateKey(matchId), JSON.stringify(state), STATE_TTL);
+  return withHouseRules(state);
+}
+
+/** Bu kıraathanenin değişmez kuralları: 12-13-1 (13'ten sonra 1) serisi hiçbir masada geçerli değildir. Devam eden maçlara da uygulanır. */
+function withHouseRules(state: GameState): GameState {
+  if (state.rules.allowThirteenOne) state.rules = { ...state.rules, allowThirteenOne: false };
   return state;
 }
 

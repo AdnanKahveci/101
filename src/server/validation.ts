@@ -72,7 +72,8 @@ export function settingsToRules(s: RoomSettings): RuleProfile {
   const { allowSpectators: _ignored, ...rules } = s;
   const profileName = [s.teamMode ? "Eşli" : "Eşsiz", s.folding ? "Katlamalı" : "Katlamasız", s.assisted ? "Yardımlı" : "Yardımsız"].join(" · ");
   // Gösterge sahte okey çıkarsa her zaman yeni gösterge açılır (sahte okey gösterge olamaz).
-  return { ...DEFAULT_RULES, ...rules, redrawFakeJokerIndicator: true, profileName };
+  // 12-13-1 serisi bu sitede her zaman geçersizdir (oda ayarıyla açılamaz).
+  return { ...DEFAULT_RULES, ...rules, allowThirteenOne: false, redrawFakeJokerIndicator: true, profileName };
 }
 
 // ----------------------------------------------------------------- Komutlar

@@ -126,7 +126,6 @@ export function RoomSettingsForm({
         <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
           <Switch label="Seri açma" checked={value.allowRunOpening} onChange={(v) => set("allowRunOpening", v)} disabled={disabled} />
           <Switch label="Çift açma" checked={value.allowPairOpening} onChange={(v) => set("allowPairOpening", v)} disabled={disabled} />
-          <Switch label="12-13-1 serisi" description="13'ten sonra 1 (14 puan). 13-1-2 her zaman geçersiz." checked={value.allowThirteenOne} onChange={(v) => set("allowThirteenOne", v)} disabled={disabled} />
           <Switch label="Okeyle çift" description="Okey + herhangi taş çift sayılır" checked={value.allowJokerPair} onChange={(v) => set("allowJokerPair", v)} disabled={disabled} />
           <Switch label="Çift açan pere işler" checked={value.pairOpenerCanAddToMelds} onChange={(v) => set("pairOpenerCanAddToMelds", v)} disabled={disabled} />
           <Switch label="Okey değiştirme" description="Açmış oyuncu masadaki okeyi gerçek taşla alabilir" checked={value.jokerReplacePolicy === "openedOnly"} onChange={(v) => set("jokerReplacePolicy", v ? "openedOnly" : "disabled")} disabled={disabled} />

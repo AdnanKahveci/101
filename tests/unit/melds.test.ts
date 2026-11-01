@@ -58,6 +58,15 @@ describe("Seri per", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("12-13-1");
   });
+  it("12-13-1 hiçbir şekilde açılamaz / işlenemez; oda ayarı açık gönderilse bile kapalı kalır", async () => {
+    const { settingsToRules, DEFAULT_ROOM_SETTINGS } = await import("@/server/validation");
+    const rules = settingsToRules({ ...DEFAULT_ROOM_SETTINGS, allowThirteenOne: true } as never);
+    expect(rules.allowThirteenOne).toBe(false);
+    expect(v(["r12-0", "r13-0", "r1-0"], rules).ok).toBe(false);
+    expect(v(["r11-0", "r12-0", "r13-0", "r1-0"], rules).ok).toBe(false);
+    const meld: TableMeld = { id: "m", owner: 0, kind: "run", cells: [11, 12, 13].map((n) => ({ tileId: `r${n}-0` as never, color: "red", value: n, isJoker: false })) };
+    expect(addTileToMeld(meld, T("r1-0"), okey, rules).ok).toBe(false);
+  });
   it("13-1-2 her profilde reddedilir", () => {
     expect(v(["r13-0", "r1-0", "r2-0"]).ok).toBe(false);
     expect(v(["r13-0", "r1-0", "r2-0"], { ...R, allowThirteenOne: true }).ok).toBe(false);

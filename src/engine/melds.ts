@@ -77,7 +77,7 @@ function resolveRun(
   }
   if (candidates.length === 0) {
     if (rules.allowThirteenOne === false && faces.some((f) => f.value === 1) && faces.some((f) => f.value >= 12)) {
-      return "Bu masada 13'ten sonra 1 gelen seriler (12-13-1) geçersizdir.";
+      return "13'ten sonra 1 gelmez: 12-13-1 serisi geçersizdir (1 yalnızca 1-2-3 gibi serinin başında olur).";
     }
     return "Seri perdeki sayılar ardışık olmalı (okeyler boşlukları doldurabilir).";
   }
