@@ -68,6 +68,16 @@ Testler gerçek tarayıcılarla, ayrı tarayıcı bağlamlarında (4 bağımsız
 
 Önceki turda düzeltilenler: `READY_NEXT_HAND` sürüm yarışı, `redrawFakeJokerIndicator=false` çökmesi, ıstaka taşlarında eksik `aria-pressed`, sentetik olaylarda `setPointerCapture` hatası, lobiden maça yönlendirme yedeği, istemci tarafında eski soket olayları.
 
+## Canlı ortam doğrulaması (2026-11-01, https://online101okey.vercel.app)
+
+Vercel Hobby, fra1; Neon Postgres (free, fra1); Upstash Redis (free, fra1).
+
+- `/api/health` → 200 `{"ok":true,"checks":{"database":"ok","redis":"ok"}}`
+- Vercel Functions WebSocket: `wss://…/api/ws` 0,6 sn'de açıldı, 15 sn açık kaldı, ping/pong çalıştı.
+- `npx playwright test -c playwright.prod.config.ts` → **2/2 geçti** (57 sn). 4 tarayıcılı kabul senaryosu ve mobil test, canlı sitede gerçek Postgres, Redis ve Vercel WebSocket ile çalıştı.
+
+Böylece aşağıdaki listede yer alan Vercel WebSocket, gerçek Redis ve gerçek Postgres maddeleri canlıda doğrulanmıştır. Yük testi ve 300 sn sonrası otomatik yeniden bağlanmanın canlıda uzun süreli gözlemi hâlâ yapılmadı.
+
 ## Test edilemeyenler (tamamlandı olarak işaretlenmez)
 
 - **Vercel Functions WebSocket (`upgradeWebSocket`) gerçek ortamda çalıştırılmadı.**
