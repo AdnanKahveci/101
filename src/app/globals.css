@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-felt-950: #04241a;
+  --color-felt-900: #073626;
+  --color-felt-800: #0b4a34;
+  --color-felt-700: #0f5f43;
+  --color-felt-600: #157553;
+  --color-wood-900: #3b2210;
+  --color-wood-800: #5a3519;
+  --color-wood-700: #7a4a24;
+  --color-wood-600: #9a6233;
+  --color-cream: #fbf6e9;
+  --color-cream-dark: #ece2c6;
+  --color-tile-red: #d42a2a;
+  --color-tile-yellow: #d98e04;
+  --color-tile-blue: #1d5fd1;
+  --color-tile-black: #1c1c1c;
+  --color-gold: #f2c14e;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-felt-950);
+  color: #f3f4ef;
+  min-height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.felt {
+  background:
+    radial-gradient(ellipse at center, rgba(255, 255, 255, 0.08) 0%, transparent 65%),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.04) 0 2px, transparent 2px 4px),
+    var(--color-felt-800);
+}
+
+.wood {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 3px, transparent 3px 11px),
+    linear-gradient(180deg, var(--color-wood-600), var(--color-wood-800));
+}
+
+.tile-face {
+  background: linear-gradient(180deg, #fffdf6 0%, var(--color-cream) 60%, var(--color-cream-dark) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -2px 0 rgba(0, 0, 0, 0.12) inset,
+    0 2px 3px rgba(0, 0, 0, 0.35);
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(242, 193, 78, 0.7); }
+  100% { box-shadow: 0 0 0 10px rgba(242, 193, 78, 0); }
+}
+.turn-pulse {
+  animation: pulse-ring 1.4s ease-out infinite;
+}

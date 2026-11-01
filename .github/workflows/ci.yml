@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tip denetimi
+        run: npm run typecheck
+      - name: Birim + entegrasyon testleri (motor, 4 oyunculu çok instance'lı maç)
+        run: npm test
+      - name: Üretim derlemesi
+        run: npm run build
+      - name: Playwright tarayıcısı
+        run: npx playwright install --with-deps chromium
+      - name: Uçtan uca testler (4 gerçek tarayıcı oturumu)
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
