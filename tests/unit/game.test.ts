@@ -474,6 +474,24 @@ describe("Taş işleme, okey değiştirme ve cezalar", () => {
     expect(s.hand.penalties.slice(before)).toEqual([expect.objectContaining({ seat: 0, amount: 101 })]);
   });
 
+  it("okey değiştirme: kullanım belirtilmezse okey ıstakaya gelir, sonra kendi perinde kullanılabilir", () => {
+    let s = scenario({
+      indicator: IND,
+      hands: {
+        0: ["r10-0", "b4-0", "r12-0", "r13-0", ...RUN46_K, ...GROUP9, "r11-1", "y1-0", "y2-0", "k1-0"],
+      },
+    });
+    s = act(s, 0, { type: "OPEN_MELDS", melds: [{ tileIds: ["r10-0", "b4-0", "r12-0", "r13-0"] }, { tileIds: RUN46_K }, { tileIds: GROUP9 }] });
+    const runId = s.hand.melds[0].id;
+    s = act(s, 0, { type: "REPLACE_JOKER", meldId: runId, tileId: "r11-1" });
+    expect(s.hand.hands[0].map((t) => t.id)).toContain("b4-0");
+    expect(s.hand.hands[0].map((t) => t.id)).not.toContain("r11-1");
+    // Okeyle hemen kendi perini açabilir
+    s = act(s, 0, { type: "OPEN_MELDS", melds: [{ tileIds: ["y1-0", "y2-0", "b4-0"] }] });
+    expect(s.hand.melds.at(-1)!.cells.map((c) => c.tileId)).toContain("b4-0");
+    expect(countAllTiles(s)).toHaveLength(106);
+  });
+
   it("okey değiştirme kapalı profilde reddedilir", () => {
     const s = scenario({ rules: { jokerReplacePolicy: "disabled" }, indicator: IND, hands: { 0: ["r1-0"] } });
     expect(reject(s, 0, { type: "REPLACE_JOKER", meldId: "x", tileId: "r1-0", jokerUse: { type: "addToMeld", meldId: "y" } })).toContain(

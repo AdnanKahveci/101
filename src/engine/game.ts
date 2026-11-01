@@ -349,9 +349,11 @@ export function applyAction(
       meld.cells = r.value.cells;
       let newHand = removeFromHand(hand(), [tile.id]);
       const used: TileId[] = [tile.id];
-      // Geri alınan okey aynı hamlede kullanılmak zorunda (atomik işlem).
+      // Geri alınan okey: hemen kullanılabilir (atomik) ya da ıstakaya alınıp sonra kullanılabilir.
       const use = action.jokerUse;
-      if (use.type === "addToMeld") {
+      if (!use) {
+        newHand = [...newHand, jokerTile];
+      } else if (use.type === "addToMeld") {
         const target = h.melds.find((m) => m.id === use.meldId);
         if (!target) return err("Okeyin işleneceği per bulunamadı.");
         const ar = addTileToMeld(target, jokerTile, h.okey, rules, use.side);

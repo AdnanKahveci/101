@@ -89,7 +89,7 @@ Bu belge `src/engine` içindeki oyun motorunun **gerçekte uyguladığı** kural
 - Seriye okey eklenirken uç (`side`) seçilebilir.
 - Çift açan oyuncu da pere taş işleyebilir (`pairOpenerCanAddToMelds = true`).
 - **Okey değiştirme** (`REPLACE_JOKER`, `jokerReplacePolicy = openedOnly`): açmış oyuncu, masadaki okeyin temsil ettiği gerçek taşı koyup okeyi alabilir. Gruplarda okey eksik renklerden herhangi birinin yerine geçebilir.
-- Okey değiştirme **atomiktir**: alınan okey aynı komut içinde ya yeni bir perde (`newMeld`) ya da mevcut bir pere (`addToMeld`) kullanılmalıdır. Herhangi bir parça geçersizse hamlenin tamamı reddedilir.
+- Alınan okey varsayılan olarak **ıstakaya (ele) gelir**; oyuncu onu sonra kendi perinde, çiftinde vb. kullanabilir. İsterse aynı komutta hemen yeni bir perde (`newMeld`) veya mevcut bir pere (`addToMeld`) koyabilir; bu durumda işlem atomiktir ve herhangi bir parça geçersizse hamlenin tamamı reddedilir.
 
 ## 9. Bitiş türleri
 

@@ -101,7 +101,7 @@ export const gameActionSchema = z.discriminatedUnion("type", [
     jokerUse: z.discriminatedUnion("type", [
       z.object({ type: z.literal("newMeld"), meld: meldSpec }),
       z.object({ type: z.literal("addToMeld"), meldId: z.string().max(16), side: z.enum(["start", "end"]).optional() }),
-    ]),
+    ]).optional(),
   }),
   z.object({ type: z.literal("DISCARD_TILE"), tileId }),
   z.object({ type: z.literal("FINISH_HAND"), tileId }),

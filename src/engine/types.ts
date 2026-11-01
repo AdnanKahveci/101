@@ -271,7 +271,8 @@ export type GameAction =
   | { type: "OPEN_MELDS"; melds: MeldSpec[] }
   | { type: "OPEN_PAIRS"; pairs: [TileId, TileId][] }
   | { type: "ADD_TO_MELD"; meldId: string; tileId: TileId; side?: "start" | "end" }
-  | { type: "REPLACE_JOKER"; meldId: string; tileId: TileId; jokerUse: JokerUse }
+  /** jokerUse verilmezse geri alınan okey ıstakaya (ele) gelir. */
+  | { type: "REPLACE_JOKER"; meldId: string; tileId: TileId; jokerUse?: JokerUse }
   | { type: "DISCARD_TILE"; tileId: TileId }
   | { type: "FINISH_HAND"; tileId: TileId }
   | { type: "READY_NEXT_HAND" }

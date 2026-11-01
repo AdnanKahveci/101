@@ -678,9 +678,9 @@ function JokerReplaceDialog({
     );
   const others = (stagedMelds[0]?.tileIds ?? selected).filter((id) => id !== state.tileId);
   return (
-    <Dialog open onClose={onClose} title="Okeyi nereye koyacaksınız?">
+    <Dialog open onClose={onClose} title="Okeyi al">
       <p className="mb-3 text-sm text-white/70">
-        Geri aldığınız okey aynı hamlede kullanılmalıdır.
+        Okeyi ıstakanıza alıp sonra kendi perinizde/çiftinizde kullanabilir ya da hemen bir yere koyabilirsiniz.
         {view.rules.penaltiesEnabled &&
           meld.owner !== view.mySeat &&
           (!view.rules.teamMode || meld.owner % 2 !== (view.mySeat ?? 0) % 2) && (
@@ -690,6 +690,14 @@ function JokerReplaceDialog({
           )}
       </p>
       <div className="space-y-2">
+        <Button
+          className="w-full"
+          data-testid="joker-to-rack"
+          onClick={() => onSubmit({ type: "REPLACE_JOKER", meldId: meld.id, tileId: state.tileId })}
+        >
+          Okeyi ıstakaya al
+        </Button>
+        {(options.length > 0 || others.length >= 2) && <p className="pt-1 text-xs text-white/50">veya hemen kullan:</p>}
         {options.slice(0, 8).map((o) => (
           <Button
             key={`${o.meldId}-${o.side}`}
@@ -709,9 +717,6 @@ function JokerReplaceDialog({
           >
             Seçili taşlarla yeni per aç ({others.length} taş + okey)
           </Button>
-        )}
-        {options.length === 0 && others.length < 2 && (
-          <p className="text-sm text-amber-300">Okeyi kullanabileceğiniz bir yer yok. Önce yeni per için en az iki taş seçin.</p>
         )}
       </div>
     </Dialog>
