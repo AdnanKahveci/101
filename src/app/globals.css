@@ -300,3 +300,8 @@ body.dragging-tile .meld-zone {
   border: 1px solid rgba(242, 193, 78, 0.25);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
+
+.meld-zone.meld-zone-sm {
+  width: 1.5rem;
+  height: 2rem;
+}

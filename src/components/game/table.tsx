@@ -44,7 +44,7 @@ export function PlayerBadge({
         "relative flex items-center gap-2 rounded-2xl border bg-black/55 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm",
         teamColor || "border-white/10",
         isTurn && "turn-pulse border-gold/80",
-        position === "left" || position === "right" ? "flex-col sm:flex-row" : "",
+        position === "left" || position === "right" ? "w-[84px] flex-col px-1.5 sm:w-[96px]" : "",
       )}
       data-testid={`seat-${seat}`}
       data-anchor={`seat-${seat}`}
@@ -305,10 +305,13 @@ export function MeldView({
   ownerName,
   zones,
   onZone,
+  compact,
 }: {
   meld: TableMeld;
   okey: Face;
   ownerName: string;
+  /** Masada çok taş varken taşlar küçülür (kaydırma çubuğu olmasın) */
+  compact?: boolean;
   /** İşleme yapılabiliyorsa perin başında/sonunda bırakma kareleri göster (geçerlilik gösterilmez). */
   zones?: boolean;
   onZone?: (side: "start" | "end") => void;
@@ -322,7 +325,7 @@ export function MeldView({
       onClick={onZone ? () => onZone(side) : undefined}
       aria-label={`${ownerName} ${meld.kind === "run" ? "serisinin" : "grubunun"} ${side === "start" ? "başına" : "sonuna"} işle`}
       title={side === "start" ? "Başına işle" : "Sonuna işle"}
-      className="meld-zone grid shrink-0 place-items-center rounded-md border-2 border-dashed border-white/25 text-base font-black text-white/40"
+      className={cn(compact && "meld-zone-sm", "meld-zone grid shrink-0 place-items-center rounded-md border-2 border-dashed border-white/25 text-base font-black text-white/40")}
     >
       +
     </button>
@@ -346,7 +349,7 @@ export function MeldView({
             key={c.tileId}
             tile={tile}
             okey={okey}
-            size="meld"
+            size={compact ? "xs" : "meld"}
             layout={false}
             highlight={recent.includes(c.tileId) ? "fresh" : null}
             represents={c.isJoker ? { color: c.color, value: c.value } : null}
@@ -358,12 +361,12 @@ export function MeldView({
   );
 }
 
-export function PairView({ pair, okey }: { pair: TablePair; okey: Face }) {
+export function PairView({ pair, okey, compact }: { pair: TablePair; okey: Face; compact?: boolean }) {
   const recent = useFx((s) => s.recent);
   return (
     <div className="flex shrink-0 gap-[2px] rounded-lg border border-sky-300/20 bg-sky-950/40 p-1 shadow-[0_3px_8px_rgba(0,0,0,0.35)]">
       {pair.tileIds.map((id) => (
-        <Tile key={id} tile={parseTile(id)} okey={okey} size="meld" layout={false} highlight={recent.includes(id) ? "fresh" : null} />
+        <Tile key={id} tile={parseTile(id)} okey={okey} size={compact ? "xs" : "meld"} layout={false} highlight={recent.includes(id) ? "fresh" : null} />
       ))}
     </div>
   );

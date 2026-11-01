@@ -309,17 +309,19 @@ export function GameClient({ matchId }: { matchId: string }) {
     pairs: view.hand.pairs.filter((p) => p.owner === s),
   }));
 
+  const compactTable = view.hand.melds.reduce((n, m) => n + m.cells.length + 2, 0) + view.hand.pairs.length * 3 > 52;
+
   /** Bir oyuncunun masaya açtığı perler ve çiftler – o oyuncunun önünde, ona doğru dizilir. */
   const seatMelds = (seat: Seat, side: "top" | "bottom" | "left" | "right") => {
     const o = meldsByOwner.find((x) => x.seat === seat);
     if (!o || (o.melds.length === 0 && o.pairs.length === 0)) return null;
-    const vertical = side === "left" || side === "right";
+    // Perler alt alta dizilir; sütun dolunca yan sütuna geçer (kaydırma yok). Çok taş varsa küçülür.
     return (
       <div
         className={cn(
-          "seat-melds flex max-h-full gap-1.5 rounded-xl p-1",
-          vertical ? "flex-col" : "flex-wrap justify-center",
-          side === "right" ? "items-end" : vertical ? "items-start" : "items-start",
+          "seat-melds flex h-full max-h-full w-full flex-col flex-wrap gap-1.5 p-1",
+          side === "right" ? "content-end items-end" : side === "left" ? "content-start items-start" : "content-center items-start",
+          side === "top" ? "justify-start" : side === "bottom" ? "justify-end" : "justify-center",
         )}
         data-testid={`seat-melds-${side}`}
       >
@@ -329,17 +331,14 @@ export function GameClient({ matchId }: { matchId: string }) {
             meld={m}
             okey={okey}
             ownerName={seatName(view, seat)}
+            compact={compactTable}
             zones={isMyTurn && legal.has("ADD_TO_MELD")}
             onZone={selectedOne ? (sd) => tryAddToMeld(selectedOne, m.id, sd) : undefined}
           />
         ))}
-        {o.pairs.length > 0 && (
-          <div className={cn("gap-1.5", vertical ? "grid grid-cols-2" : "flex flex-wrap justify-center")}>
-            {o.pairs.map((pr) => (
-              <PairView key={pr.id} pair={pr} okey={okey} />
-            ))}
-          </div>
-        )}
+        {o.pairs.map((pr) => (
+          <PairView key={pr.id} pair={pr} okey={okey} compact={compactTable} />
+        ))}
       </div>
     );
   };
@@ -429,12 +428,12 @@ export function GameClient({ matchId }: { matchId: string }) {
         )}
 
         {/* Masa */}
-        <div className="relative mx-auto mt-1 w-full max-w-[1200px] min-h-0 flex-1 px-1 sm:mt-2 sm:px-6">
+        <div className="relative mx-auto mt-1 w-full min-h-0 flex-1 px-1 sm:mt-2 sm:px-3">
           <div className="table-shell" aria-hidden>
             <div className="table-felt" />
           </div>
           <TableCaption />
-          <div className="relative grid h-full grid-cols-[auto_1fr_auto] grid-rows-[auto_1fr_auto] gap-1 p-3 sm:gap-2 sm:p-6">
+          <div className="relative grid h-full grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] gap-1 p-3 sm:gap-2 sm:p-5">
             {/* Üst sıra: sol üst köşe = karşıdakinin attıkları, üst oyuncu, sağ üst köşe = sağdakinin attıkları */}
             <div className="col-start-1 row-start-1 flex items-start justify-start">
               <DiscardPile seat={pos.top} tiles={view.hand.discards[pos.top]} okey={okey} label={`${seatName(view, pos.top)} attığı taşlar`} />
@@ -448,14 +447,14 @@ export function GameClient({ matchId }: { matchId: string }) {
             </div>
 
             {/* Orta sıra */}
-            <div className="col-start-1 row-start-2 flex items-center gap-1">
+            <div className="col-start-1 row-start-2 flex items-center gap-1 justify-self-start">
               <PlayerBadge view={view} seat={pos.left} position="left" online={presence[pos.left] ?? false} />
               <OpponentRail count={view.players.find((p) => p.seat === pos.left)?.tileCount ?? 0} orientation="vertical" />
             </div>
             {/* Orta: her oyuncunun açtıkları kendi önünde (gerçek masadaki gibi), deste ortada */}
-            <div className="col-start-2 row-start-2 grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1" aria-label="Açılmış perler">
-              <div className="col-span-3 row-start-1 flex min-h-0 items-start justify-center overflow-y-auto">{seatMelds(pos.top, "top")}</div>
-              <div className="col-start-1 row-start-2 flex min-h-0 items-center justify-start overflow-y-auto">{seatMelds(pos.left, "left")}</div>
+            <div className="col-start-2 row-start-2 grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-1" aria-label="Açılmış perler">
+              <div className="col-span-3 row-start-1 flex min-h-0 items-start justify-center overflow-hidden">{seatMelds(pos.top, "top")}</div>
+              <div className="col-start-1 row-start-2 flex min-h-0 items-center justify-start overflow-hidden">{seatMelds(pos.left, "left")}</div>
               <div className="col-start-2 row-start-2 flex flex-col items-center justify-center gap-1">
                 <CenterPile
                   view={view}
@@ -466,8 +465,8 @@ export function GameClient({ matchId }: { matchId: string }) {
                 />
                 {view.hand.melds.length === 0 && view.hand.pairs.length === 0 && <p className="text-center text-xs text-white/35">Henüz açan yok</p>}
               </div>
-              <div className="col-start-3 row-start-2 flex min-h-0 items-center justify-end overflow-y-auto">{seatMelds(pos.right, "right")}</div>
-              <div className="col-span-3 row-start-3 flex min-h-0 items-end justify-center overflow-y-auto">{seatMelds(pos.bottom, "bottom")}</div>
+              <div className="col-start-3 row-start-2 flex min-h-0 items-center justify-end overflow-hidden">{seatMelds(pos.right, "right")}</div>
+              <div className="col-span-3 row-start-3 flex min-h-0 items-end justify-center overflow-hidden">{seatMelds(pos.bottom, "bottom")}</div>
             </div>
             <div className="col-start-3 row-start-2 flex items-center justify-end gap-1">
               <OpponentRail count={view.players.find((p) => p.seat === pos.right)?.tileCount ?? 0} orientation="vertical" />
