@@ -36,6 +36,7 @@ import { CenterPile, ConnectionIcon, DiscardPile, MeldView, OpponentRail, PairVi
 import { FlightLayer, TableCaption } from "./effects";
 import { ChatButton, ChatPanel, ChatTableLayer, useChat } from "./chat";
 import { AmbientButton, AmbientPlayer } from "./ambient";
+import { GestureButton } from "./gestures";
 import { FeltButton, useFelt } from "./table-theme";
 import type { ChatMessage } from "@/lib/chat-shared";
 import { useFx } from "./fx";
@@ -490,6 +491,7 @@ export function GameClient({ matchId }: { matchId: string }) {
             </div>
             <div className="col-start-2 row-start-3 flex min-w-0 flex-wrap items-end justify-center gap-2">
               <PlayerBadge view={view} seat={pos.bottom} position="bottom" online={status === "open"} />
+              {view.mySeat !== null && <GestureButton view={view} />}
               {(assisted || stagedMelds.length > 0 || stagedPairs.length > 0 || obligation) && (
                 <div className="flex min-w-0 flex-wrap items-center justify-center gap-1 text-[11px]">
                   {view.hand.myIndicatorPending && (

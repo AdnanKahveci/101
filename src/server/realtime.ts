@@ -15,8 +15,8 @@ import { checkTimeout, loadState, processCommand, viewFor } from "./game-service
 import { runBots } from "./bots";
 import { getRoom } from "./rooms";
 import { commandSchema } from "./validation";
-import { chatHistory, sendChat } from "./chat";
-import { CHAT_MAX_LEN, DRINK_IDS, EMOTE_IDS, type ChatMessage } from "@/lib/chat-shared";
+import { canSee, chatHistory, sendChat } from "./chat";
+import { CHAT_MAX_LEN, DRINK_IDS, EMOTE_IDS, GESTURE_IDS, type ChatMessage } from "@/lib/chat-shared";
 
 const clientMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("ping") }),
@@ -30,6 +30,8 @@ const clientMessage = z.discriminatedUnion("t", [
     text: z.string().max(CHAT_MAX_LEN * 2).optional(),
     drink: z.enum(DRINK_IDS).optional(),
     emote: z.enum(EMOTE_IDS).optional(),
+    gesture: z.enum(GESTURE_IDS).optional(),
+    secret: z.boolean().optional(),
     to: z.number().int().min(0).max(3).nullable().optional(),
   }),
 ]);
@@ -95,6 +97,7 @@ class Connection {
   private subs = new Map<string, Unsubscribe>();
   private watchedMatch: string | null = null;
   private lastSentVersion = -1;
+  private mySeat: number | null = null;
   private roomCode: string | null = null;
   private roomToken: string | undefined;
   private disposed = false;
@@ -189,7 +192,7 @@ class Connection {
         case "cmd":
           return await this.onCommand(parsed.cmd);
         case "chat":
-          await sendChat(this.user, parsed.matchId, { text: parsed.text, drink: parsed.drink, emote: parsed.emote, to: parsed.to });
+          await sendChat(this.user, parsed.matchId, { text: parsed.text, drink: parsed.drink, emote: parsed.emote, gesture: parsed.gesture, secret: parsed.secret, to: parsed.to });
           return;
       }
     } catch (e) {
@@ -240,16 +243,17 @@ class Connection {
     if (this.watchedMatch && this.watchedMatch !== matchId) await this.unsubscribe(matchChannel(this.watchedMatch));
     this.watchedMatch = matchId;
     this.lastSentVersion = view.version;
+    this.mySeat = view.mySeat;
     await this.subscribe(matchChannel(matchId), (msg) => {
       if (msg.type === "chat") {
-        if (msg.matchId === matchId) this.send({ t: "chat", matchId, msg: msg.msg });
+        if (msg.matchId === matchId && canSee(msg.msg, this.mySeat)) this.send({ t: "chat", matchId, msg: msg.msg });
         return;
       }
       if (msg.type !== "match") return;
       if (msg.version > this.lastSentVersion || msg.force) void this.pushState(matchId, !!msg.force);
     });
     this.send({ t: "state", view });
-    this.send({ t: "chatHistory", matchId, messages: await chatHistory(matchId) });
+    this.send({ t: "chatHistory", matchId, messages: await chatHistory(matchId, this.mySeat) });
     // Diğer oyunculara bağlantı durumunu bildir.
     await publish(matchChannel(matchId), { type: "match", matchId, version: view.version, force: true });
   }

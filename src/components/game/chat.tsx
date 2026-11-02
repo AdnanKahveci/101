@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { AnimatePresence, motion } from "motion/react";
 import { MessageCircle, Send, X } from "lucide-react";
-import { CHAT_MAX_LEN, DRINKS, DRINK_IDS, EMOTES, EMOTE_IDS, QUICK_LINES, type ChatMessage, type DrinkId, type EmoteId } from "@/lib/chat-shared";
+import { CHAT_MAX_LEN, DRINKS, DRINK_IDS, EMOTES, EMOTE_IDS, GESTURES, QUICK_LINES, type ChatMessage, type DrinkId, type EmoteId, type GestureId } from "@/lib/chat-shared";
 import { realtime } from "@/lib/realtime";
 import { play } from "@/lib/sound";
 import { cn } from "@/lib/utils";
@@ -29,13 +29,18 @@ interface Flying {
   id: string;
   drink?: DrinkId;
   emote?: EmoteId;
+  gesture?: GestureId;
+  caught?: boolean;
   from: number;
   to: number | null;
 }
 interface Pop {
   id: string;
   seat: number | null;
-  emote: EmoteId;
+  emote?: EmoteId;
+  gesture?: GestureId;
+  caught?: boolean;
+  from?: number;
 }
 
 interface ChatState {
@@ -98,7 +103,12 @@ export const useChat = create<ChatState>((set, get) => ({
     if (s.matchId !== matchId || s.messages.some((x) => x.id === m.id)) return;
     const mine = m.seat === mySeat;
     set({ messages: [...s.messages, m].slice(-80), unread: s.open || mine ? s.unread : s.unread + 1 });
-    if (m.kind === "emote" && m.emote) {
+    if (m.kind === "gesture" && m.gesture) {
+      if (get().showEmotes) {
+        set({ flying: [...get().flying, { id: m.id, gesture: m.gesture, caught: m.caught, from: m.seat, to: m.to ?? null }] });
+        play("whoosh");
+      }
+    } else if (m.kind === "emote" && m.emote) {
       if (get().showEmotes) {
         set({ flying: [...get().flying, { id: m.id, emote: m.emote, from: m.seat, to: m.to ?? null }] });
         play("whoosh");
@@ -115,11 +125,12 @@ export const useChat = create<ChatState>((set, get) => ({
   landed: (id) => {
     const f = get().flying.find((x) => x.id === id);
     if (!f) return;
-    if (f.emote) {
-      const emote = f.emote;
-      set({ flying: get().flying.filter((x) => x.id !== id), pops: [...get().pops, { id, seat: f.to, emote }] });
+    if (f.emote || f.gesture) {
+      set({ flying: get().flying.filter((x) => x.id !== id), pops: [...get().pops, { id, seat: f.to, emote: f.emote, gesture: f.gesture, caught: f.caught, from: f.from }] });
       play("pop");
-      setTimeout(() => set({ pops: get().pops.filter((p) => p.id !== id) }), 2600);
+      if (f.gesture && GESTURES[f.gesture].anim === "kick") shakeSeat(f.to, "seat-kicked");
+      else if (f.gesture && GESTURES[f.gesture].anim === "shake") shakeSeat(f.from, "seat-wobble");
+      setTimeout(() => set({ pops: get().pops.filter((p) => p.id !== id) }), f.gesture ? 3200 : 2600);
       return;
     }
     if (!f.drink) return;
@@ -130,6 +141,21 @@ export const useChat = create<ChatState>((set, get) => ({
   },
   reset: () => set({ matchId: null, messages: [], open: false, unread: 0, served: [], bubbles: [], flying: [], pops: [] }),
 }));
+
+/** Koltuk rozetini kısa süre sallar (tekme, panik…). */
+function shakeSeat(seat: number | null, cls: string) {
+  if (seat === null) return;
+  const el = document.querySelector(`[data-anchor="seat-${seat}"]`);
+  if (!el) return;
+  el.classList.remove(cls);
+  void (el as HTMLElement).offsetWidth;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 900);
+}
+
+export function sendGesture(matchId: string, gesture: GestureId, to: number, secret: boolean) {
+  return realtime.chat({ matchId, gesture, to, secret });
+}
 
 export function sendChatText(matchId: string, text: string) {
   return realtime.chat({ matchId, text });
@@ -217,7 +243,9 @@ function FlyingDrink({ f }: { f: Flying }) {
       transition={{ duration: 1.1, ease: [0.3, 0.7, 0.4, 1] }}
       onAnimationComplete={() => landed(f.id)}
     >
-      <span className={cn("drink-glass", f.emote ? "text-4xl" : "text-3xl")}>{f.emote ? EMOTES[f.emote].emoji : DRINKS[f.drink!].emoji}</span>
+      <span className={cn("drink-glass", f.emote || f.gesture ? "text-4xl" : "text-3xl")}>
+        {f.gesture ? GESTURES[f.gesture].emoji : f.emote ? EMOTES[f.emote].emoji : DRINKS[f.drink!].emoji}
+      </span>
     </motion.div>
   );
 }
@@ -226,6 +254,7 @@ function FlyingDrink({ f }: { f: Flying }) {
 function EmotePop({ p }: { p: Pop }) {
   const r = useAnchor(p.seat);
   if (!r) return null;
+  if (p.gesture) return <GesturePop p={p} r={r} />;
   const x = r.x + r.w / 2 - 32;
   const y = r.y + r.h / 2 - 32;
   return (
@@ -236,8 +265,51 @@ function EmotePop({ p }: { p: Pop }) {
       exit={{ x, y, scale: 0.2, opacity: 0 }}
       transition={{ duration: 0.8 }}
     >
-      <span className="emote-pop text-5xl">{EMOTES[p.emote].emoji}</span>
+      <span className="emote-pop text-5xl">{EMOTES[p.emote!].emoji}</span>
     </motion.div>
+  );
+}
+
+const GESTURE_MOTION = {
+  wink: { scale: [0.3, 1.7, 1.3, 1.5, 1.4], rotate: [0, 12, -6, 0], y: [0, -6, 0] },
+  pat: { scale: [0.3, 1.5, 1.4], rotate: [0, 0, 0], y: [0, -14, 0, -10, 0, -6, 0] },
+  shake: { scale: [0.3, 1.5, 1.4], rotate: [0, -20, 20, -16, 16, -8, 0], y: [0] },
+  kick: { scale: [0.3, 1.8, 1.4], rotate: [60, -35, 10, 0], y: [40, -10, 0] },
+} satisfies Record<string, { scale: number[]; rotate: number[]; y: number[] }>;
+
+/** İşaret: hedefin üstünde emoji + ne yapıldığını anlatan küçük şerit. Yakalanan gizli işarette "YAKALANDI" damgası. */
+function GesturePop({ p, r }: { p: Pop; r: Rect }) {
+  const g = GESTURES[p.gesture!];
+  const m = GESTURE_MOTION[g.anim];
+  const x = r.x + r.w / 2 - 32;
+  const y = r.y + r.h / 2 - 32;
+  const lx = Math.max(8, Math.min(window.innerWidth - 208, r.x + r.w / 2 - 100));
+  const below = r.y < 140;
+  return (
+    <>
+      <motion.div
+        className="absolute left-0 top-0 grid h-16 w-16 place-items-center"
+        style={{ x }}
+        initial={{ top: y, scale: 0.3, opacity: 1 }}
+        animate={{ top: m.y.map((d) => y + d), scale: m.scale, rotate: m.rotate, opacity: 1 }}
+        exit={{ scale: 0.2, opacity: 0 }}
+        transition={{ duration: 1 }}
+      >
+        <span className="emote-pop text-5xl">{g.emoji}</span>
+      </motion.div>
+      <motion.div
+        className="absolute left-0 top-0 w-[200px] text-center"
+        style={{ x: lx, y: below ? r.y + r.h + 6 : r.y - 30 }}
+        initial={{ opacity: 0, scale: 0.7 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <span className={cn("gesture-caption inline-block rounded-full px-2.5 py-0.5 text-[11px] font-black", p.caught && "gesture-caught")}>
+          {p.caught ? `👀 YAKALANDI! ${g.line}` : g.line}
+        </span>
+      </motion.div>
+    </>
   );
 }
 
@@ -361,6 +433,24 @@ export function ChatPanel({ view }: { view: ClientGameView }) {
             {messages.length === 0 && <p className="mt-6 text-center text-xs text-white/40">Henüz kimse bir şey demedi. Bir çay ısmarlayarak başla!</p>}
             {messages.map((m) => {
               const mine = m.seat === view.mySeat;
+              if (m.kind === "gesture" && m.gesture) {
+                const g = GESTURES[m.gesture];
+                const to = m.to === view.mySeat ? "sana" : m.to != null ? nameOf(m.to) : "";
+                return (
+                  <p
+                    key={m.id}
+                    className={cn(
+                      "rounded-lg px-2 py-1 text-center text-[11px]",
+                      m.caught ? "bg-red-900/40 text-red-100" : m.secret ? "bg-indigo-900/40 text-indigo-100/90" : "bg-sky-900/30 text-sky-100/90",
+                    )}
+                  >
+                    {m.caught && <b className="mr-1">👀 Yakalandı!</b>}
+                    {m.secret && !m.caught && <span className="mr-1" title="Gizli işaret – yalnızca ikiniz görüyorsunuz">🤫</span>}
+                    <b>{mine ? "Sen" : m.name}</b> → {to} <span className="text-base">{g.emoji}</span> {g.line}
+                    <span className="ml-1 text-white/30">{fmtTime(m.ts)}</span>
+                  </p>
+                );
+              }
               if (m.kind === "emote" && m.emote) {
                 const to = m.to == null ? "masaya" : m.to === view.mySeat ? "sana" : nameOf(m.to);
                 return (
