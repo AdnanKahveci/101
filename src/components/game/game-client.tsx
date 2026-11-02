@@ -36,6 +36,7 @@ import { CenterPile, ConnectionIcon, DiscardPile, MeldView, OpponentRail, PairVi
 import { FlightLayer, TableCaption } from "./effects";
 import { ChatButton, ChatPanel, ChatTableLayer, useChat } from "./chat";
 import { AmbientButton, AmbientPlayer } from "./ambient";
+import { FeltButton, useFelt } from "./table-theme";
 import type { ChatMessage } from "@/lib/chat-shared";
 import { useFx } from "./fx";
 import { HandResultDialog, MatchEndDialog, ScoreBoard } from "./panels";
@@ -50,6 +51,7 @@ function pref(key: string, fallback: boolean) {
 }
 
 export function GameClient({ matchId }: { matchId: string }) {
+  const felt = useFelt((s) => s.theme);
   const router = useRouter();
   const g = useGame();
   const { view, selected, stagedMelds, stagedPairs, busy, send } = g;
@@ -379,7 +381,7 @@ export function GameClient({ matchId }: { matchId: string }) {
 
   return (
     <LayoutGroup>
-      <div className="kiraathane fixed inset-0 flex flex-col overflow-hidden">
+      <div className="kiraathane fixed inset-0 flex flex-col overflow-hidden" data-felt={felt}>
         {/* Üst çubuk */}
         <div className="relative z-10 flex items-center gap-2 bg-black/45 px-2 py-1.5 text-xs backdrop-blur-sm sm:text-sm">
           <span className="rounded-md bg-gold/90 px-2 py-0.5 font-black text-felt-950">
@@ -391,6 +393,7 @@ export function GameClient({ matchId }: { matchId: string }) {
             <ConnectionIcon status={status} />
             <ChatButton />
             <AmbientButton />
+            <FeltButton />
             <Button size="sm" variant="secondary" onClick={() => setScoreOpen(true)} aria-label="Skor tablosu">
               <Trophy className="h-4 w-4" /> <span className="hidden sm:inline">Skor</span>
             </Button>

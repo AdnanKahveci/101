@@ -95,6 +95,68 @@ body {
   mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
 }
 
+/* Masa renk temaları (data-felt) */
+.kiraathane {
+  --felt-a: #3aa9ab;
+  --felt-b: #2b9295;
+  --felt-c: #217a7e;
+  --rim-a: #c98d52;
+  --rim-b: #9a6233;
+  --rim-c: #6b3f1d;
+}
+.kiraathane[data-felt="yesil"] {
+  --felt-a: #1d5a3c;
+  --felt-b: #164a31;
+  --felt-c: #123d29;
+  --rim-a: #9a6233;
+  --rim-b: #6b3f1d;
+  --rim-c: #4b2a12;
+}
+.kiraathane[data-felt="lacivert"] {
+  --felt-a: #2a4f8f;
+  --felt-b: #1f3f78;
+  --felt-c: #183262;
+  --rim-a: #a8703c;
+  --rim-b: #7a4a24;
+  --rim-c: #4b2a12;
+}
+.kiraathane[data-felt="bordo"] {
+  --felt-a: #8f2a3b;
+  --felt-b: #7a2232;
+  --felt-c: #621b28;
+  --rim-a: #b07a42;
+  --rim-b: #7a4a24;
+  --rim-c: #4b2a12;
+}
+/* Turkuaz masada çuhanın ortasında hafif ışık */
+.kiraathane:not([data-felt]) .table-felt,
+.kiraathane[data-felt="turkuaz"] .table-felt {
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 45%, rgba(255, 255, 255, 0.14), transparent 72%),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.03) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, var(--felt-a), var(--felt-b) 60%, var(--felt-c));
+}
+
+/* Radyo ışığı */
+.radio-led {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.radio-led-on {
+  background: #ef4444;
+  box-shadow: 0 0 6px 1px rgba(239, 68, 68, 0.8);
+  animation: radio-blink 1.6s ease-in-out infinite;
+}
+@keyframes radio-blink {
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radio-led-on { animation: none; }
+}
+
 /* Masa: ahşap kenarlı yeşil çuha, hafif perspektif (yalnızca dekoratif katmanda) */
 .table-shell {
   position: absolute;
@@ -105,7 +167,7 @@ body {
   padding: 14px;
   background:
     repeating-linear-gradient(100deg, rgba(0, 0, 0, 0.08) 0 3px, transparent 3px 13px),
-    linear-gradient(180deg, #9a6233, #6b3f1d 55%, #4b2a12);
+    linear-gradient(180deg, var(--rim-a), var(--rim-b) 55%, var(--rim-c));
   box-shadow:
     0 30px 60px rgba(0, 0, 0, 0.6),
     inset 0 2px 0 rgba(255, 220, 170, 0.35),
@@ -127,7 +189,7 @@ body {
   background:
     radial-gradient(ellipse 70% 60% at 50% 45%, rgba(255, 255, 255, 0.07), transparent 70%),
     repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.035) 0 2px, transparent 2px 4px),
-    linear-gradient(180deg, #1d5a3c, #164a31 60%, #123d29);
+    linear-gradient(180deg, var(--felt-a), var(--felt-b) 60%, var(--felt-c));
   box-shadow:
     inset 0 0 0 2px rgba(0, 0, 0, 0.35),
     inset 0 10px 30px rgba(0, 0, 0, 0.45);
